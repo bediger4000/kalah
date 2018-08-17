@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -20,9 +21,13 @@ type Board struct {
 	minpits [7]int
 }
 
-var maxPly int
+var maxPly int = 16
 
 func main() {
+
+	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
+	maxDepthPtr := flag.Int("d", 8, "maximum lookahead depth, moves for each side")
+	flag.Parse()
 
 	var bd Board
 
@@ -31,8 +36,12 @@ func main() {
 		bd.minpits[i] = 4
 	}
 
-	maxPly = 16
 	player := MINIMIZER
+	if *computerFirstPtr {
+		player = MAXIMIZER
+	}
+
+	maxPly = 2 * *maxDepthPtr
 
 	for {
 		var pit, value int
