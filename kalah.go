@@ -10,12 +10,16 @@ const (
 	MAXIMIZER = 1
 	MINIMIZER = -1
 	UNSET     = 0
+	WIN       = 10000
+	LOSS      = -10000
 )
 
 type Board struct {
 	maxpits [7]int
 	minpits [7]int
 }
+
+var maxPly int
 
 func main() {
 
@@ -26,6 +30,7 @@ func main() {
 		bd.minpits[i] = 4
 	}
 
+	maxPly = 16
 	player := MINIMIZER
 
 	for {
@@ -36,7 +41,7 @@ func main() {
 			pit = readMove(bd, true)
 		case MAXIMIZER:
 			pit = chooseMove(bd, true)
-			fmt.Printf("Computer chooses %d\n", pit)
+			fmt.Printf("Computer chooses %d\n\n", pit)
 		}
 		bonus := makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
@@ -77,13 +82,90 @@ func (p Board) String() string {
 	return top + mid + bot
 }
 
-func chooseMove(bd Board, print bool) (pit int) {
-	for i := 0; i < 6; i++ {
-		if bd.maxpits[i] != UNSET {
-			pit = i
+func chooseMove(bd Board, print bool) (bestpit int) {
+	bestvalue := 2 * LOSS
+	bestpit = 0
+	for pit, stones := range bd.maxpits[0:6] {
+		if stones > 0 {
+			bd2 := bd
+			makeMove(&bd2, pit, MAXIMIZER)
+			end, winner := checkEnd(&bd2)
+			var value int
+			if !end {
+				value = alphaBeta(bd2, 1, MINIMIZER, 2*LOSS, 2*WIN)
+			} else {
+				switch winner {
+				case MAXIMIZER:
+					value = WIN
+				case MINIMIZER:
+					value = LOSS
+				default: //
+					value = bd2.maxpits[6] - bd2.minpits[6]
+				}
+			}
+			fmt.Printf("pit %d/%d, value %d, best value %d for %d\n", pit, stones, value, bestpit, bestvalue)
+			if value > bestvalue {
+				bestvalue = value
+				bestpit = pit
+			}
+			// makeMove() does a lot to bd2, just dump it.
 		}
 	}
-	return pit
+	return bestpit
+}
+
+func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
+	if ply > maxPly {
+		return bd.maxpits[6] - bd.minpits[6] // low cost static value
+	}
+	switch player {
+	case MAXIMIZER:
+		value = 2 * LOSS // Possible to score less than LOSS
+		for pit, stones := range bd.maxpits[0:6] {
+			if stones != UNSET {
+				bd2 := bd
+				bonus := makeMove(&bd2, pit, player)
+				nextplayer := -player
+				if bonus {
+					nextplayer = player
+				}
+				n := alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+
+				if n > value {
+					value = n
+				}
+				if value > alpha {
+					alpha = value
+				}
+				if beta <= alpha {
+					return value
+				}
+			}
+		}
+	case MINIMIZER:
+		value = 2 * WIN // You can score greater than WIN
+		for pit, stones := range bd.minpits[0:6] {
+			if stones != 0 {
+				bd2 := bd
+				bonus := makeMove(&bd2, pit, player)
+				nextplayer := -player
+				if bonus {
+					nextplayer = player
+				}
+				n := alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+				if n < value {
+					value = n
+				}
+				if value < beta {
+					beta = value
+				}
+				if beta <= alpha {
+					return value
+				}
+			}
+		}
+	}
+	return value
 }
 
 func readMove(bd Board, print bool) (pit int) {
@@ -136,10 +218,8 @@ func makeMove(bd *Board, pit int, player int) (bonusmove bool) {
 			sides[S^1][5-i] = 0
 			sides[S][i]-- // so no special cases just below
 		}
-		if S == 0 {
-			sides[S][i]++
-			hand--
-		}
+		sides[S][i]++
+		hand--
 		if i == 6 {
 			i = 0
 			S ^= 1 // flip to other side of board
@@ -152,6 +232,7 @@ func makeMove(bd *Board, pit int, player int) (bonusmove bool) {
 	}
 	return bonusmove
 }
+
 func checkEnd(bd *Board) (end bool, winner int) {
 	winner = UNSET
 	sidesum := 0
@@ -168,7 +249,7 @@ func checkEnd(bd *Board) (end bool, winner int) {
 		bd.minpits[6] += otherleft
 		winner = bd.maxpits[6] - bd.minpits[6]
 	} else {
-		sidesum := 0
+		sidesum = 0
 		for i := 0; i < 6; i++ {
 			sidesum += bd.minpits[i]
 		}
@@ -184,12 +265,13 @@ func checkEnd(bd *Board) (end bool, winner int) {
 		}
 	}
 	if end {
+		// Ties can happen, winner == 0 in that case, which == UNSET
 		switch {
 		case winner > 0:
 			winner = MAXIMIZER
 		case winner < 0:
 			winner = MINIMIZER
 		}
-	} // otherwise, winner doesn't make sense
+	}
 	return end, winner
 }
