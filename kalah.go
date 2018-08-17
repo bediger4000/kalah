@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 const (
@@ -34,16 +35,18 @@ func main() {
 	player := MINIMIZER
 
 	for {
-		var pit int
+		var pit, value int
 		fmt.Printf("%v\n", bd)
 		switch player {
 		case MINIMIZER:
 			pit = readMove(bd, true)
 		case MAXIMIZER:
-			pit = chooseMove(bd, true)
-			fmt.Printf("Computer chooses %d\n\n", pit)
+			before := time.Now()
+			pit, value = chooseMove(bd, true)
+			et := time.Now().Sub(before)
+			fmt.Printf("Computer chooses %d (%d) [%v]\n\n", pit, value, et)
 		}
-		bonus := makeMove(&bd, pit, player)
+		player = makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
 		if gameEnd {
 			w := "computer"
@@ -53,10 +56,6 @@ func main() {
 			fmt.Printf("Game over, %s won\n", w)
 			break
 		}
-		if bonus {
-			continue
-		}
-		player = -player
 	}
 	fmt.Printf("Final:\n%v\n", bd)
 }
@@ -82,8 +81,8 @@ func (p Board) String() string {
 	return top + mid + bot
 }
 
-func chooseMove(bd Board, print bool) (bestpit int) {
-	bestvalue := 2 * LOSS
+func chooseMove(bd Board, print bool) (bestpit int, bestvalue int) {
+	bestvalue = 2 * LOSS
 	bestpit = 0
 	for pit, stones := range bd.maxpits[0:6] {
 		if stones > 0 {
@@ -103,7 +102,7 @@ func chooseMove(bd Board, print bool) (bestpit int) {
 					value = bd2.maxpits[6] - bd2.minpits[6]
 				}
 			}
-			fmt.Printf("pit %d/%d, value %d, best value %d for %d\n", pit, stones, value, bestpit, bestvalue)
+			// fmt.Printf("pit %d/%d, value %d, best value %d for %d\n", pit, stones, value, bestpit, bestvalue)
 			if value > bestvalue {
 				bestvalue = value
 				bestpit = pit
@@ -111,7 +110,7 @@ func chooseMove(bd Board, print bool) (bestpit int) {
 			// makeMove() does a lot to bd2, just dump it.
 		}
 	}
-	return bestpit
+	return bestpit, bestvalue
 }
 
 func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
@@ -124,12 +123,21 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 		for pit, stones := range bd.maxpits[0:6] {
 			if stones != UNSET {
 				bd2 := bd
-				bonus := makeMove(&bd2, pit, player)
-				nextplayer := -player
-				if bonus {
-					nextplayer = player
+				nextplayer := makeMove(&bd2, pit, player)
+				end, winner := checkEnd(&bd2)
+				var n int
+				if !end {
+					n = alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+				} else {
+					switch winner {
+					case MAXIMIZER:
+						value = WIN - ply
+					case MINIMIZER:
+						value = LOSS + ply
+					default:
+						value = 0
+					}
 				}
-				n := alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
 
 				if n > value {
 					value = n
@@ -147,12 +155,21 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 		for pit, stones := range bd.minpits[0:6] {
 			if stones != 0 {
 				bd2 := bd
-				bonus := makeMove(&bd2, pit, player)
-				nextplayer := -player
-				if bonus {
-					nextplayer = player
+				nextplayer := makeMove(&bd2, pit, player)
+				end, winner := checkEnd(&bd2)
+				var n int
+				if !end {
+					n = alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+				} else {
+					switch winner {
+					case MAXIMIZER:
+						value = WIN - ply
+					case MINIMIZER:
+						value = LOSS + ply
+					default:
+						value = 0
+					}
 				}
-				n := alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
 				if n < value {
 					value = n
 				}
@@ -194,8 +211,10 @@ READMOVE:
 	return pit
 }
 
-func makeMove(bd *Board, pit int, player int) (bonusmove bool) {
+func makeMove(bd *Board, pit int, player int) (nextplayer int) {
 	var sides [2]*[7]int
+
+	nextplayer = -player
 
 	switch player {
 	case MAXIMIZER:
@@ -209,6 +228,8 @@ func makeMove(bd *Board, pit int, player int) (bonusmove bool) {
 	S := 0 // side of player is always 0
 	hand := sides[S][pit]
 	sides[S][pit] = UNSET
+
+	bonusmove := false
 
 	for i := pit + 1; hand > 0; {
 		// last stone, on player's side, last pit is empty,
@@ -230,7 +251,10 @@ func makeMove(bd *Board, pit int, player int) (bonusmove bool) {
 			i++
 		}
 	}
-	return bonusmove
+	if bonusmove {
+		nextplayer = player
+	}
+	return nextplayer
 }
 
 func checkEnd(bd *Board) (end bool, winner int) {
