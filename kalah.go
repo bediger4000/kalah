@@ -87,8 +87,8 @@ func chooseMove(bd Board, print bool) (pit int) {
 }
 
 func readMove(bd Board, print bool) (pit int) {
-	readMove := false
-	for !readMove {
+READMOVE:
+	for {
 		if print {
 			fmt.Printf("Your move: ")
 		}
@@ -106,7 +106,7 @@ func readMove(bd Board, print bool) (pit int) {
 				fmt.Printf("Choose a number between 0 and 5, try again\n")
 			}
 		case bd.minpits[pit] != UNSET:
-			readMove = true
+			break READMOVE
 		}
 	}
 	return pit
