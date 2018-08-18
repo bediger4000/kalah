@@ -248,8 +248,10 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int) {
 			sides[S^1][5-i] = 0
 			sides[S][i]-- // so no special cases just below
 		}
-		sides[S][i]++
-		hand--
+		if !(S == 1 && i == 6) {
+			sides[S][i]++
+			hand--
+		}
 		if i == 6 {
 			i = 0
 			S ^= 1 // flip to other side of board
