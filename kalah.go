@@ -19,6 +19,7 @@ const (
 type Board struct {
 	maxpits [7]int
 	minpits [7]int
+	reverse bool
 }
 
 var maxPly int = 16
@@ -28,9 +29,13 @@ func main() {
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
 	maxDepthPtr := flag.Int("d", 8, "maximum lookahead depth, moves for each side")
 	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
+	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	flag.Parse()
 
 	var bd Board
+	if *reversePtr {
+		bd.reverse = true
+	}
 
 	for i := 0; i < 6; i++ {
 		bd.maxpits[i] = *stoneCountPtr
@@ -54,9 +59,9 @@ func main() {
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
 			et := time.Now().Sub(before)
-			fmt.Printf("Computer chooses %d (%d) [%v]\n\n", pit, value, et)
+			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
 		}
-		player = makeMove(&bd, pit, player)
+		player, _ = makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
 		if gameEnd {
 			w := "computer"
@@ -71,22 +76,42 @@ func main() {
 }
 
 func (p Board) String() string {
-	top := fmt.Sprintf("   %2d %2d %2d %2d %2d %2d\n",
-		p.maxpits[5],
-		p.maxpits[4],
-		p.maxpits[3],
-		p.maxpits[2],
-		p.maxpits[1],
-		p.maxpits[0])
-	bot := fmt.Sprintf("   %2d %2d %2d %2d %2d %2d",
-		p.minpits[0],
-		p.minpits[1],
-		p.minpits[2],
-		p.minpits[3],
-		p.minpits[4],
-		p.minpits[5])
+	var top, mid, bot string
 
-	mid := fmt.Sprintf("%2d                   %2d\n", p.maxpits[6], p.minpits[6])
+	if p.reverse {
+		top = fmt.Sprintf("   %2d %2d %2d %2d %2d %2d\n",
+			p.minpits[5],
+			p.minpits[4],
+			p.minpits[3],
+			p.minpits[2],
+			p.minpits[1],
+			p.minpits[0])
+		bot = fmt.Sprintf("   %2d %2d %2d %2d %2d %2d",
+			p.maxpits[0],
+			p.maxpits[1],
+			p.maxpits[2],
+			p.maxpits[3],
+			p.maxpits[4],
+			p.maxpits[5])
+		mid = fmt.Sprintf("%2d                   %2d\n", p.minpits[6], p.maxpits[6])
+	} else {
+
+		top = fmt.Sprintf("   %2d %2d %2d %2d %2d %2d\n",
+			p.maxpits[5],
+			p.maxpits[4],
+			p.maxpits[3],
+			p.maxpits[2],
+			p.maxpits[1],
+			p.maxpits[0])
+		bot = fmt.Sprintf("   %2d %2d %2d %2d %2d %2d",
+			p.minpits[0],
+			p.minpits[1],
+			p.minpits[2],
+			p.minpits[3],
+			p.minpits[4],
+			p.minpits[5])
+		mid = fmt.Sprintf("%2d                   %2d\n", p.maxpits[6], p.minpits[6])
+	}
 
 	return top + mid + bot
 }
@@ -129,19 +154,15 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 	}
 	switch player {
 	case MAXIMIZER:
-		value = 2 * LOSS // Possible to score less than LOSS
+		value = 2 * LOSS
 		for pit, stones := range bd.maxpits[0:6] {
 			if stones != UNSET {
 				bd2 := bd
-				nextplayer := makeMove(&bd2, pit, player)
+				nextplayer, plydelta := makeMove(&bd2, pit, player)
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					nextply := ply + 1
-					if nextplayer == player {
-						nextply = ply
-					}
-					n = alphaBeta(bd2, nextply, nextplayer, alpha, beta)
+					n = alphaBeta(bd2, ply+plydelta, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
@@ -169,15 +190,11 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 		for pit, stones := range bd.minpits[0:6] {
 			if stones != 0 {
 				bd2 := bd
-				nextplayer := makeMove(&bd2, pit, player)
+				nextplayer, plydelta := makeMove(&bd2, pit, player)
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					nextply := ply + 1
-					if nextplayer == player {
-						nextply = ply
-					}
-					n = alphaBeta(bd2, nextply, nextplayer, alpha, beta)
+					n = alphaBeta(bd2, ply+plydelta, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
@@ -229,10 +246,11 @@ READMOVE:
 	return pit
 }
 
-func makeMove(bd *Board, pit int, player int) (nextplayer int) {
+func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	var sides [2]*[7]int
 
 	nextplayer = -player
+	plydelta = 1
 
 	switch player {
 	case MAXIMIZER:
@@ -273,8 +291,9 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int) {
 	}
 	if bonusmove {
 		nextplayer = player
+		plydelta = 0
 	}
-	return nextplayer
+	return nextplayer, plydelta
 }
 
 func checkEnd(bd *Board) (end bool, winner int) {
