@@ -27,13 +27,14 @@ func main() {
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
 	maxDepthPtr := flag.Int("d", 8, "maximum lookahead depth, moves for each side")
+	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
 	flag.Parse()
 
 	var bd Board
 
 	for i := 0; i < 6; i++ {
-		bd.maxpits[i] = 4
-		bd.minpits[i] = 4
+		bd.maxpits[i] = *stoneCountPtr
+		bd.minpits[i] = *stoneCountPtr
 	}
 
 	player := MINIMIZER
@@ -136,7 +137,11 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					n = alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+					nextply := ply + 1
+					if nextplayer == player {
+						nextply = ply
+					}
+					n = alphaBeta(bd2, nextply, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
@@ -168,7 +173,11 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					n = alphaBeta(bd2, ply+1, nextplayer, alpha, beta)
+					nextply := ply + 1
+					if nextplayer == player {
+						nextply = ply
+					}
+					n = alphaBeta(bd2, nextply, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
