@@ -23,11 +23,12 @@ type Board struct {
 }
 
 var maxPly int = 16
+var winningStonesCount int
 
 func main() {
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
-	maxDepthPtr := flag.Int("d", 8, "maximum lookahead depth, moves for each side")
+	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
 	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	flag.Parse()
@@ -41,6 +42,7 @@ func main() {
 		bd.maxpits[i] = *stoneCountPtr
 		bd.minpits[i] = *stoneCountPtr
 	}
+	winningStonesCount = 6 * *stoneCountPtr
 
 	player := MINIMIZER
 	if *computerFirstPtr {
@@ -152,6 +154,9 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 	if ply > maxPly {
 		return bd.maxpits[6] - bd.minpits[6] // low cost static value
 	}
+	// checkEnd() should get the case where someone already has
+	// more than half the stones in their pot, so alphaBeta()
+	// only has to do depth check
 	switch player {
 	case MAXIMIZER:
 		value = 2 * LOSS
@@ -298,6 +303,12 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 
 func checkEnd(bd *Board) (end bool, winner int) {
 	winner = UNSET
+	if bd.maxpits[6] > winningStonesCount {
+		return true, MAXIMIZER
+	}
+	if bd.minpits[6] > winningStonesCount {
+		return true, MINIMIZER
+	}
 	sidesum := 0
 	for i := 0; i < 6; i++ {
 		sidesum += bd.maxpits[i]
