@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime/pprof"
 	"time"
 )
 
@@ -26,6 +28,13 @@ var maxPly int = 16
 var winningStonesCount int
 
 func main() {
+	os.Remove("kalah.prof")
+	f, err := os.Create("kalah.prof")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
 	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
@@ -60,7 +69,7 @@ func main() {
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
-			et := time.Now().Sub(before)
+			et := time.Since(before)
 			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
 		}
 		player, _ = makeMove(&bd, pit, player)
