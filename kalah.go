@@ -22,15 +22,26 @@ type Board struct {
 	reverse bool
 }
 
+type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
+
 var maxPly int = 16
 
 func main() {
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
-	maxDepthPtr := flag.Int("d", 8, "maximum lookahead depth, moves for each side")
+	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
 	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
+	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
 	flag.Parse()
+
+	var chooseMove chooserFunction
+
+	if *monteCarloPtr {
+		chooseMove = chooseMonteCarlo
+	} else {
+		chooseMove = chooseAlphaBeta
+	}
 
 	var bd Board
 	if *reversePtr {
@@ -116,7 +127,11 @@ func (p Board) String() string {
 	return top + mid + bot
 }
 
-func chooseMove(bd Board, print bool) (bestpit int, bestvalue int) {
+func chooseMonteCarlo(bd Board, print bool) (bestpit int, bestvalue int) {
+	return 0, 10
+}
+
+func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 	bestvalue = 2 * LOSS
 	bestpit = 0
 	for pit, stones := range bd.maxpits[0:6] {
