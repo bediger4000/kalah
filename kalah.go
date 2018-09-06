@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime/pprof"
 	"time"
 )
 
@@ -25,8 +27,16 @@ type Board struct {
 type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
 
 var maxPly int = 16
+var winningStonesCount int
 
 func main() {
+	os.Remove("kalah.prof")
+	f, err := os.Create("kalah.prof")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
 	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
@@ -52,6 +62,7 @@ func main() {
 		bd.maxpits[i] = *stoneCountPtr
 		bd.minpits[i] = *stoneCountPtr
 	}
+	winningStonesCount = 6 * *stoneCountPtr
 
 	player := MINIMIZER
 	if *computerFirstPtr {
@@ -69,7 +80,7 @@ func main() {
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
-			et := time.Now().Sub(before)
+			et := time.Since(before)
 			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
 		}
 		player, _ = makeMove(&bd, pit, player)
@@ -167,6 +178,9 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 	if ply > maxPly {
 		return bd.maxpits[6] - bd.minpits[6] // low cost static value
 	}
+	// checkEnd() should get the case where someone already has
+	// more than half the stones in their pot, so alphaBeta()
+	// only has to do depth check
 	switch player {
 	case MAXIMIZER:
 		value = 2 * LOSS
@@ -313,6 +327,12 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 
 func checkEnd(bd *Board) (end bool, winner int) {
 	winner = UNSET
+	if bd.maxpits[6] > winningStonesCount {
+		return true, MAXIMIZER
+	}
+	if bd.minpits[6] > winningStonesCount {
+		return true, MINIMIZER
+	}
 	sidesum := 0
 	for i := 0; i < 6; i++ {
 		sidesum += bd.maxpits[i]
