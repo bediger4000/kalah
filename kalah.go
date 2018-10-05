@@ -562,7 +562,7 @@ func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 		other = p.board.maxpits
 	}
 	sidesum, othersum := 0, 0
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 6; i++ {
 		sidesum += side[i]
 		othersum += other[i]
 		if side[i] != 0 {
