@@ -30,44 +30,48 @@ type Board struct {
 type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
 
 type GameState struct {
-	playerJustMoved int
-	board           Board
-	cachedResults   [3]float64
+	player        int
+	board         Board
+	cachedResults [3]float64
 }
 
 type Node struct {
-	move            int
-	parentNode      *Node
-	childNodes      []*Node
-	wins            float64
-	visits          float64
-	untriedMoves    []int
-	playerJustMoved int
+	move         int
+	parentNode   *Node
+	childNodes   []*Node
+	wins         float64
+	visits       float64
+	untriedMoves []int
+	player       int
 }
 
 type MCTS struct {
 	movesNode *Node
-	state     GameState
 }
 
 var maxPly int = 16
 var winningStonesCount int
 
 func main() {
-	os.Remove("kalah.prof")
-	f, err := os.Create("kalah.prof")
-	if err != nil {
-		log.Fatal(err)
-	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
 	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
 	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
+	profilePtr := flag.Bool("P", false, "Do CPU profiling")
 	flag.Parse()
+
+	if *profilePtr {
+		os.Remove("kalah.prof")
+		f, err := os.Create("kalah.prof")
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+		defer f.Close()
+	}
 
 	var bd Board
 	if *reversePtr {
@@ -89,11 +93,6 @@ func main() {
 
 	if *monteCarloPtr {
 		mcts := &MCTS{}
-		mcts.state.playerJustMoved = -player
-		for i := 0; i < 6; i++ {
-			mcts.state.board.maxpits[i] = *stoneCountPtr
-			mcts.state.board.minpits[i] = *stoneCountPtr
-		}
 		chooseMove = mcts.chooseMonteCarlo
 		rand.Seed(time.Now().UTC().UnixNano())
 	} else {
@@ -107,7 +106,7 @@ func main() {
 		fmt.Printf("%v\n", bd)
 		switch player {
 		case MINIMIZER:
-			pit = readMove(bd, true)
+			pit = 0 // readMove(bd, true)
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
@@ -167,15 +166,6 @@ func (p Board) String() string {
 	}
 
 	return top + mid + bot
-}
-
-func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
-	var bestvalue float64
-	bestvalue, p.movesNode = UCT(&(p.state), 100000, 1.00, p.movesNode)
-	p.movesNode.parentNode = nil
-	bestpit = p.movesNode.move
-	p.state.DoMove(bestpit)
-	return bestpit, int(bestvalue)
 }
 
 func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
@@ -418,17 +408,28 @@ func checkEnd(bd *Board) (end bool, winner int) {
 	return end, winner
 }
 
+func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
+	fmt.Println("enter chooseMonteCarlo")
+	fmt.Printf("bd:\n%s\n", bd.String())
+	currentState := &GameState{board: bd, player: MAXIMIZER}
+	var bestvalue float64
+	bestvalue, p.movesNode = UCT(currentState, 1, 1.00, p.movesNode)
+	p.movesNode.parentNode = nil
+	bestpit = p.movesNode.move
+	return bestpit, int(bestvalue)
+}
+
 func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float64, *Node) {
 
 	if rootnode == nil {
-		rootnode = NewNode(-1, nil, rootstate)
-	} else {
-		rootnode.playerJustMoved = rootstate.playerJustMoved
+		rootnode = NewNode(0, nil, rootstate)
 	}
+
+	rootnode.player = rootstate.player
 
 	for i := 0; i < itermax; i++ {
 
-		node := rootnode           // node will get modified, need to return to rootnode
+		node := rootnode           // node moves up & down tree
 		state := rootstate.Clone() // need to leave rootstate alone
 
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
@@ -446,15 +447,25 @@ func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float
 			// node now represents m, the previously-untried move.
 		}
 
-		moves, terminalNode := state.GetMoves()
+		moves, endOfGame := state.GetMoves()
 
 		// starting with current state, pick a random
 		// branch of the game tree, all the way to a win/loss.
-		for !terminalNode {
+		for !endOfGame {
+			fmt.Printf("State before: %s\n", state)
+			fmt.Printf("Moves before: %v\n", moves)
+			fmt.Scanf("\n")
 			m := moves[rand.Intn(len(moves))]
+			player := state.player
 			state.DoMove(m)
-			moves, terminalNode = state.GetMoves()
+			fmt.Printf("After %d/%d, state: %s\n", m, player, state)
+			fmt.Scanf("\n")
+			moves, endOfGame = state.GetMoves()
+			fmt.Printf("State            after: %s\n", state)
+			fmt.Printf("player %d, Moves after:  %v\n", state.player, moves)
+			fmt.Scanf("\n")
 		}
+		fmt.Printf("Final state: %s\n", state)
 
 		// state.board now points to a board where a player
 		// won and the other lost, and it's a "descendant"
@@ -464,7 +475,7 @@ func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float
 
 		state.resetCachedResults()
 		for ; node != nil; node = node.parentNode {
-			node.Update(state.GetResult(node.playerJustMoved))
+			node.Update(state.GetResult(node.player))
 		}
 	}
 
@@ -476,7 +487,7 @@ func NewNode(move int, parent *Node, state *GameState) *Node {
 	n.move = move
 	n.parentNode = parent
 	n.untriedMoves, _ = state.GetMoves()
-	n.playerJustMoved = state.playerJustMoved
+	n.player = state.player
 	return &n
 }
 
@@ -523,16 +534,11 @@ func (p *Node) Update(result float64) {
 }
 
 func NewGameState() *GameState {
-	var st GameState
-	st.playerJustMoved = -1
-	return &st
+	return &GameState{player: MINIMIZER}
 }
 
 func (p *GameState) Clone() *GameState {
-	var st GameState
-	st.playerJustMoved = p.playerJustMoved
-	st.board = p.board
-	return &st
+	return &GameState{player: p.player, board: p.board}
 }
 
 func (p *GameState) resetCachedResults() {
@@ -542,7 +548,8 @@ func (p *GameState) resetCachedResults() {
 }
 
 func (p *GameState) DoMove(move int) {
-	p.playerJustMoved, _ = makeMove(&(p.board), move, -p.playerJustMoved)
+	nextPlayer, _ := makeMove(&(p.board), move, p.player)
+	p.player = nextPlayer
 }
 
 func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
@@ -553,7 +560,7 @@ func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 		endOfGame = true
 	}
 	var side, other [7]int
-	switch -p.playerJustMoved {
+	switch p.player {
 	case MAXIMIZER:
 		side = p.board.maxpits
 		other = p.board.minpits
@@ -583,4 +590,13 @@ func (p *GameState) GetResult(playerjm int) float64 {
 		return cached
 	}
 	return 0.0 // Should probably never get here.
+}
+
+func (p *GameState) String() string {
+	rep := "MAX\n"
+	if p.player == MINIMIZER {
+		rep = "MIN\n"
+	}
+	rep += p.board.String()
+	return rep
 }
