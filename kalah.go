@@ -106,7 +106,7 @@ func main() {
 		fmt.Printf("%v\n", bd)
 		switch player {
 		case MINIMIZER:
-			pit = 0 // readMove(bd, true)
+			readMove(bd, true)
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
@@ -413,7 +413,7 @@ func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
 	fmt.Printf("bd:\n%s\n", bd.String())
 	currentState := &GameState{board: bd, player: MAXIMIZER}
 	var bestvalue float64
-	bestvalue, p.movesNode = UCT(currentState, 1, 1.00, p.movesNode)
+	bestvalue, p.movesNode = UCT(currentState, 1000, 1.00, p.movesNode)
 	p.movesNode.parentNode = nil
 	bestpit = p.movesNode.move
 	return bestpit, int(bestvalue)
@@ -452,20 +452,20 @@ func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float
 		// starting with current state, pick a random
 		// branch of the game tree, all the way to a win/loss.
 		for !endOfGame {
-			fmt.Printf("State before: %s\n", state)
-			fmt.Printf("Moves before: %v\n", moves)
-			fmt.Scanf("\n")
+			//fmt.Printf("State before: %s\n", state)
+			//fmt.Printf("Moves before: %v\n", moves)
+			//fmt.Scanf("\n")
 			m := moves[rand.Intn(len(moves))]
-			player := state.player
 			state.DoMove(m)
-			fmt.Printf("After %d/%d, state: %s\n", m, player, state)
-			fmt.Scanf("\n")
+			//fmt.Printf("After %d/%d, state: %s\n", m, player, state)
+			//fmt.Scanf("\n")
 			moves, endOfGame = state.GetMoves()
-			fmt.Printf("State            after: %s\n", state)
-			fmt.Printf("player %d, Moves after:  %v\n", state.player, moves)
-			fmt.Scanf("\n")
+			//fmt.Printf("State            after: %s\n", state)
+			//fmt.Printf("player %d, Moves after:  %v\n", state.player, moves)
+			//fmt.Scanf("\n")
 		}
-		fmt.Printf("Final state: %s\n", state)
+		// fmt.Printf("Final state: %s\n", state)
+		// fmt.Scanf("\n")
 
 		// state.board now points to a board where a player
 		// won and the other lost, and it's a "descendant"
@@ -475,11 +475,14 @@ func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float
 
 		state.resetCachedResults()
 		for ; node != nil; node = node.parentNode {
+			fmt.Printf("Node: %v\n", node)
 			node.Update(state.GetResult(node.player))
 		}
 	}
 
-	return rootnode.bestMove(UCTK)
+	bs, bm := rootnode.bestMove(UCTK)
+	fmt.Printf("UCT returns: %v\n", bm)
+	return bs, bm
 }
 
 func NewNode(move int, parent *Node, state *GameState) *Node {
@@ -584,12 +587,21 @@ func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 	return moves, endOfGame
 }
 
-func (p *GameState) GetResult(playerjm int) float64 {
-	cached := p.cachedResults[playerjm+1]
+func (p *GameState) GetResult(playerJustMoved int) float64 {
+	cached := p.cachedResults[playerJustMoved+1]
 	if cached >= 0.0 {
 		return cached
 	}
-	return 0.0 // Should probably never get here.
+
+	if p.board.maxpits[6] > p.board.minpits[6] {
+		p.cachedResults[MAXIMIZER+1] = 1.0
+		p.cachedResults[MINIMIZER+1] = 0.0
+	} else if p.board.minpits[6] > p.board.maxpits[6] {
+		p.cachedResults[MAXIMIZER+1] = 0.0
+		p.cachedResults[MINIMIZER+1] = 1.0
+	}
+
+	return p.cachedResults[playerJustMoved+1]
 }
 
 func (p *GameState) String() string {
@@ -599,4 +611,9 @@ func (p *GameState) String() string {
 	}
 	rep += p.board.String()
 	return rep
+}
+
+func (p *Node) String() string {
+	return fmt.Sprintf("%p %d/%d - %f:%f, %p",
+		p, p.move, p.player, p.wins, p.visits, p.parentNode)
 }
