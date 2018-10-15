@@ -106,7 +106,7 @@ func main() {
 		fmt.Printf("%v\n", bd)
 		switch player {
 		case MINIMIZER:
-			readMove(bd, true)
+			pit = readMove(bd, true)
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
@@ -475,7 +475,7 @@ func UCT(rootstate *GameState, itermax int, UCTK float64, rootnode *Node) (float
 
 		state.resetCachedResults()
 		for ; node != nil; node = node.parentNode {
-			fmt.Printf("Node: %v\n", node)
+			// fmt.Printf("Node: %v\n", node)
 			node.Update(state.GetResult(node.player))
 		}
 	}
