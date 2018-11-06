@@ -109,7 +109,8 @@ func main() {
 		fmt.Printf("%v\n", bd)
 		switch player {
 		case MINIMIZER:
-			pit = readMove(bd, true)
+			//pit = readMove(bd, true)
+			pit = 5
 		case MAXIMIZER:
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
@@ -416,17 +417,19 @@ func checkEnd(bd *Board) (end bool, winner int) {
 func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
 	fmt.Println("enter chooseMonteCarlo")
 	fmt.Printf("bd:\n%s\n", bd.String())
-	bestpit, bestvalue := UCT(bd, MAXIMIZER, p.iterations, 1.00)
+	bestpit, bestvalue := UCT(bd, p.iterations, 1.00)
 	return bestpit, int(bestvalue)
 }
 
 // UCT - based on board and player (who makes this move),
 // return the best move and its value
-func UCT(bd Board, player int, itermax int, UCTK float64) (int, float64) {
+func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 
-	rootState := GameState{player: player, board: bd}
-	rootNode := Node{player: player}
+	rootState := GameState{player: MINIMIZER, board: bd}
+	rootNode := Node{player: MINIMIZER}
 	rootNode.untriedMoves, _ = rootState.GetMoves()
+	fmt.Printf("Root state %v\n", rootState)
+	fmt.Printf("Root Node  %v\n", rootNode)
 
 	for i := 0; i < itermax; i++ {
 
@@ -470,6 +473,10 @@ func UCT(bd Board, player int, itermax int, UCTK float64) (int, float64) {
 		}
 	}
 
+	fmt.Printf("End of UCT, rootnode: %v\nChildred:\n", rootNode)
+	for _, childNode := range rootNode.childNodes {
+		fmt.Printf("\t%v\n", childNode)
+	}
 	bs, bm := rootNode.bestMove(UCTK)
 	fmt.Printf("UCT returns: %v\n", bm)
 	return bm.move, bs
@@ -551,7 +558,7 @@ func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 		endOfGame = true
 	}
 	var side, other [7]int
-	switch p.player {
+	switch -p.player { // The moves have to be for the other player
 	case MAXIMIZER:
 		side = p.board.maxpits
 		other = p.board.minpits
