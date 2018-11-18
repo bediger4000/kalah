@@ -30,7 +30,8 @@ type Board struct {
 type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
 
 type GameState struct {
-	player        int
+	player        int // player that made move resulting in board
+	nextPlayer    int // player that makes the moves resulting in childNodes
 	board         Board
 	cachedResults [3]float64
 }
@@ -425,7 +426,7 @@ func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
 // return the best move and its value
 func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 
-	rootState := GameState{player: MINIMIZER, board: bd}
+	rootState := GameState{player: MINIMIZER, nextPlayer: MAXIMIZER, board: bd}
 	rootNode := Node{player: MINIMIZER}
 	rootNode.untriedMoves, _ = rootState.GetMoves()
 	fmt.Printf("Root state %v\n", rootState)
@@ -551,14 +552,13 @@ func (p *GameState) DoMove(move int) {
 }
 
 func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
-	// Get here, p.board does not represent a win or a loss.
 
 	if p.board.maxpits[6] >= winningStonesCount ||
 		p.board.minpits[6] >= winningStonesCount {
 		endOfGame = true
 	}
 	var side, other [7]int
-	switch -p.player { // The moves have to be for the other player
+	switch p.nextPlayer { // The moves have to be for the other player
 	case MAXIMIZER:
 		side = p.board.maxpits
 		other = p.board.minpits
