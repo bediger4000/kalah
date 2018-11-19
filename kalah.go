@@ -18,7 +18,7 @@ const (
 	UNSET     = 0
 	WIN       = 10000
 	LOSS      = -10000
-	UCTK      = 1.00
+	UCTK      = 0.50
 )
 
 type Board struct {
@@ -415,8 +415,6 @@ func checkEnd(bd *Board) (end bool, winner int) {
 // chooseMonteCarlo - based on current board, return the best pit
 // for MAXIMIZER to pick up and drop down the board.
 func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
-	fmt.Println("enter chooseMonteCarlo")
-	fmt.Printf("bd:\n%s\n", bd.String())
 	bestpit, bestvalue := UCT(bd, p.iterations, 1.00)
 	return bestpit, int(bestvalue)
 }
@@ -428,8 +426,10 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 	rootState := GameState{player: MAXIMIZER, board: bd}
 	rootNode := Node{player: MINIMIZER}
 	rootNode.untriedMoves, _ = rootState.GetMoves()
-	fmt.Printf("Root state %v\n", rootState)
-	fmt.Printf("Root Node  %v\n", rootNode)
+	/*
+		fmt.Printf("****\nRoot state %v\n", rootState)
+		fmt.Printf("Root Node  %v\n", rootNode)
+	*/
 
 	for i := 0; i < itermax; i++ {
 
@@ -468,18 +468,32 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 		// the end of the game. Trace back up the tree,
 		// updating each node's wins and visit count.
 
+		if i == 100000 {
+			fmt.Printf("State: %v\n", state)
+			fmt.Printf("Board:\n%v\n", state.board)
+			fmt.Printf("Node: %v\n", node)
+		}
 		state.resetCachedResults()
 		for ; node != nil; node = node.parentNode {
-			node.Update(state.GetResult(node.player))
+			r := state.GetResult(node.player)
+			if i == 100000 {
+				fmt.Printf("Update %.2f node %v\n", r, node)
+			}
+			node.Update(r)
+		}
+		if i == 100000 {
+			os.Exit(0)
 		}
 	}
 
-	fmt.Printf("End of UCT, rootnode: %v\nChildred:\n", rootNode)
-	for _, childNode := range rootNode.childNodes {
-		fmt.Printf("\t%v\n", childNode)
-	}
+	/*
+		fmt.Printf("End of UCT, rootnode: %v\nChildren:\n", rootNode)
+		for _, childNode := range rootNode.childNodes {
+			fmt.Printf("\t%v\n", childNode)
+		}
+	*/
 	bs, bm := rootNode.bestMove(UCTK)
-	fmt.Printf("UCT returns: %v\n", bm)
+	// fmt.Printf("UCT returns: %v, value %f\n****\n", bm, bs)
 	return bm.move, bs
 }
 
@@ -496,6 +510,9 @@ func (p *Node) bestMove(UCTK float64) (bestscore float64, bestmove *Node) {
 }
 
 func (p *Node) UCTSelectChild(UCTK float64) *Node {
+	if len(p.childNodes) == 1 {
+		return p.childNodes[0]
+	}
 	_, n := p.bestMove(UCTK)
 	if n == nil {
 		fmt.Printf("UCTSelectChild returns nil\n")
@@ -503,7 +520,11 @@ func (p *Node) UCTSelectChild(UCTK float64) *Node {
 		fmt.Printf("Move %d, Untried moves: %v\n", p.move, p.untriedMoves)
 		fmt.Printf("Child nodes (%d):\n", len(p.childNodes))
 		for _, child := range p.childNodes {
-			fmt.Printf("\tplayer %d, move %d\n", child.player, child.move)
+			if child != nil {
+				fmt.Printf("\tplayer %d, move %d\n", child.player, child.move)
+			} else {
+				fmt.Printf("\tnil child node\n")
+			}
 		}
 	}
 	return n
@@ -556,11 +577,6 @@ func (p *GameState) DoMove(move int) {
 }
 
 func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
-
-	if p.board.maxpits[6] > winningStonesCount ||
-		p.board.minpits[6] > winningStonesCount {
-		endOfGame = true
-	}
 	var side, other [7]int
 	switch p.player {
 	case MAXIMIZER:
@@ -581,6 +597,11 @@ func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 
 	if sidesum == 0 || othersum == 0 {
 		endOfGame = true
+	} else {
+		if p.board.maxpits[6] > winningStonesCount ||
+			p.board.minpits[6] > winningStonesCount {
+			endOfGame = true
+		}
 	}
 
 	return moves, endOfGame
@@ -598,6 +619,9 @@ func (p *GameState) GetResult(playerJustMoved int) float64 {
 	} else if p.board.minpits[6] > p.board.maxpits[6] {
 		p.cachedResults[MAXIMIZER+1] = 0.0
 		p.cachedResults[MINIMIZER+1] = 1.0
+	} else {
+		p.cachedResults[MAXIMIZER+1] = 0.0
+		p.cachedResults[MINIMIZER+1] = 0.0
 	}
 
 	return p.cachedResults[playerJustMoved+1]
@@ -613,6 +637,6 @@ func (p *GameState) String() string {
 }
 
 func (p *Node) String() string {
-	return fmt.Sprintf("%p %d/%d - %.0f:%.0f, %p",
-		p, p.move, p.player, p.wins, p.visits, p.parentNode)
+	return fmt.Sprintf("%p: %d/%d - %.0f:%.0f, %p; %v; %d",
+		p, p.move, p.player, p.wins, p.visits, p.parentNode, p.untriedMoves, len(p.childNodes))
 }
