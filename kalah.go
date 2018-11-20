@@ -467,32 +467,14 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 		// the end of the game. Trace back up the tree,
 		// updating each node's wins and visit count.
 
-		if i == 100000 {
-			fmt.Printf("State: %v\n", state)
-			fmt.Printf("Board:\n%v\n", state.board)
-			fmt.Printf("Node: %v\n", node)
-		}
 		state.resetCachedResults()
 		for ; node != nil; node = node.parentNode {
 			r := state.GetResult(node.player)
-			if i == 100000 {
-				fmt.Printf("Update %.2f node %v\n", r, node)
-			}
 			node.Update(r)
 		}
-		/*
-			if i == 100000 {
-				os.Exit(0)
-			}
-		*/
 	}
 
-	fmt.Printf("End of UCT, rootnode: %v\nChildren:\n", rootNode)
-	for _, childNode := range rootNode.childNodes {
-		fmt.Printf("\t%v\n", childNode)
-	}
 	bs, bm := rootNode.bestMove(UCTK)
-	// fmt.Printf("UCT returns: %v, value %f\n****\n", bm, bs)
 	return bm.move, bs
 }
 
