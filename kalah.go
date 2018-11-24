@@ -31,6 +31,7 @@ type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
 
 type GameState struct {
 	player        int // player that made move resulting in board
+	nextPlayer    int // player that makes next move
 	board         Board
 	cachedResults [3]float64
 }
@@ -61,7 +62,7 @@ func main() {
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
 	profilePtr := flag.Bool("P", false, "Do CPU profiling")
-	iterationPtr := flag.Int("i", 15000, "Number of iterations for MCTS")
+	iterationPtr := flag.Int("i", 500000, "Number of iterations for MCTS")
 	flag.Parse()
 
 	if *profilePtr {
@@ -422,13 +423,9 @@ func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
 // return the best move and its value
 func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 
-	rootState := GameState{player: MAXIMIZER, board: bd}
-	rootNode := Node{player: MAXIMIZER}
+	rootState := GameState{player: MINIMIZER, nextPlayer: MAXIMIZER, board: bd}
+	rootNode := Node{player: MINIMIZER}
 	rootNode.untriedMoves, _ = rootState.GetMoves()
-	/*
-		fmt.Printf("****\nRoot state %v\n", rootState)
-		fmt.Printf("Root Node  %v\n", rootNode)
-	*/
 
 	for i := 0; i < itermax; i++ {
 
@@ -436,8 +433,8 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 		state := rootState // need to leave rootstate alone
 
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
-			node = node.UCTSelectChild(UCTK)       // updates node: now a child of rootNode
-			state.player = state.DoMove(node.move) // updates state.nextPlayer and state.board
+			node = node.UCTSelectChild(UCTK) // updates node: now a child of rootNode
+			state.DoMove(node.move)          // updates state.player, state.nextPlayer and state.board
 		}
 
 		// This condition creates a child node from an untried move
@@ -445,9 +442,8 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 		// the child node.
 		if len(node.untriedMoves) > 0 {
 			m := node.untriedMoves[rand.Intn(len(node.untriedMoves))]
-			nextPlayer := state.DoMove(m) // update state.player, state.board
+			state.DoMove(m) // update state.player, state.board
 			node = node.AddChild(m, &state)
-			state.player = nextPlayer
 			// node now represents m, the previously-untried move.
 		}
 
@@ -457,7 +453,7 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 		// branch of the game tree, all the way to a win/loss.
 		for !endOfGame {
 			m := moves[rand.Intn(len(moves))]
-			state.player = state.DoMove(m)
+			state.DoMove(m)
 			moves, endOfGame = state.GetMoves()
 		}
 
@@ -553,14 +549,15 @@ func (p *GameState) resetCachedResults() {
 	p.cachedResults[2] = -1
 }
 
-func (p *GameState) DoMove(move int) (nextPlayer int) {
-	nextPlayer, _ = makeMove(&(p.board), move, p.player)
-	return nextPlayer
+func (p *GameState) DoMove(move int) {
+	nextPlayer, _ := makeMove(&(p.board), move, p.nextPlayer)
+	p.player = p.nextPlayer
+	p.nextPlayer = nextPlayer
 }
 
 func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
 	var side, other [7]int
-	switch p.player {
+	switch p.nextPlayer {
 	case MAXIMIZER:
 		side = p.board.maxpits
 		other = p.board.minpits
@@ -626,6 +623,10 @@ func (p *GameState) String() string {
 }
 
 func (p *Node) String() string {
-	return fmt.Sprintf("%p: %d/%d - %.0f:%.0f, %p; %v; %d",
-		p, p.move, p.player, p.wins, p.visits, p.parentNode, p.untriedMoves, len(p.childNodes))
+	x := fmt.Sprintf("%d/%d - %.0f:%.0f, %v; ",
+		p.move, p.player, p.wins, p.visits, p.untriedMoves)
+	for _, child := range p.childNodes {
+		x += fmt.Sprintf("%d/%d ", child.move, child.player)
+	}
+	return x
 }
