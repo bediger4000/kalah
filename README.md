@@ -15,10 +15,36 @@ It has no configuration file(s).
 
 ## Use
 
+Players declare their moves with a number.
+The usual 6 pits per play board is represented like this:
 
-    Usage of ./kalah:
+           computer
+
+       5  4  3  2  1  0
+    X                    Y
+       0  1  2  3  4  5
+
+            human
+
+Computer's pot or store is X, human's is Y.
+Players move by sayin with of their pits (0 through 5)
+they want to move.
+Players virtually empty the chosen pit,
+then distribute its contents (stones or seeds),
+one per pit, traveling counterclockwise.
+Players drop a stone in their own pot,
+but not their opponents.
+Players get a bonus move if they drop the final stone
+in their hand into their own pot (X or Y, above).
+
+`kalah` the proram displays the current game board,
+then asks the human to input a move, which is a single-digit
+number, 0 through 5.
+
+Command line flags:
+
     -C    Computer takes first move
-    -M    MCTS instead of alpha/beta minimax
+    -M    Use MCTS instead of alpha/beta minimax
     -P    Do CPU profiling
     -R    Reverse printed board, top-to-bottom
     -d int
@@ -31,6 +57,10 @@ It has no configuration file(s).
 
 "MCTS" means [Monte Carlo Tree Search](http://mcts.ai/).
 It defaults to deciding what move to make by using Alpha/Beta minimaxing.
+
+Reverse printed board makes it easier to open two terminals side-by-side
+and play instances of the game against each other. Use "-R" on one of the
+two instances so the programs print boards that look the same.
 
 ## Design
 
@@ -48,8 +78,10 @@ It was suprisingly difficult to get bonus moves correct for MCTS.
 This variant has a bonus move.
 Players get an extra move if they drop the last stone in their
 hand into their own pot/store.
-The Alpha/Beta minimaxing code takes care of this in recursion:
-if the "next" player is the same as the current player,
-and the ply count isn't incremented.
+The Alpha/Beta minimaxing code takes care of this in recursion
+by keeping the "next" player is the same as the current player,
+and not incremented ply count.
+It doesn't reach its move horizon while a player is in the middle
+of making a multi-move sweep.
 This does lead to unexpected increases in move calculation time
 during mid-game, when a lot of bonus moves occur.
