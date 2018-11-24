@@ -15,7 +15,8 @@ It has no configuration file(s).
 
 ## Use
 
-   Usage of ./kalah:
+
+    Usage of ./kalah:
     -C    Computer takes first move
     -M    MCTS instead of alpha/beta minimax
     -P    Do CPU profiling
@@ -27,13 +28,14 @@ It has no configuration file(s).
     -n int
           number of stones per pit (default 4)
 
+
 "MCTS" means [Monte Carlo Tree Search](http://mcts.ai/).
 It defaults to deciding what move to make by using Alpha/Beta minimaxing.
 
 ## Design
 
 I used the Wikipedia article on [Alpha/Beta minimaxing](https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning).
-I should implemented one level of threading.
+I should have implemented one level of threading.
 Static value calculated as difference of player's pots or stores.
 
 The MCTS code follows the [MCTS example code](http://mcts.ai/code/python.html),
