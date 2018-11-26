@@ -9,9 +9,15 @@ accustomed to playing.
     $ git clone https://github.com/bediger4000/kalah.git $GOPATH/src/kalah
     $ go build kalah
     $ ./kalah
+    OR
+    $ ./kalah -M
 
 You don't have to install it anywhere - it runs in place.
 It has no configuration file(s).
+
+The "-M" for Monte Carlo Tree Search is probably a
+more exciting opponent.
+The Alpha/Beta version just seems cold-blooded and relentless.
 
 ## Use
 
