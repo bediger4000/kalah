@@ -18,7 +18,6 @@ const (
 	UNSET     = 0
 	WIN       = 10000
 	LOSS      = -10000
-	UCTK      = 1.00
 )
 
 type Board struct {
@@ -49,6 +48,7 @@ type Node struct {
 type MCTS struct {
 	moveNode   *Node
 	iterations int
+	uctk       float64
 }
 
 var maxPly int = 16
@@ -63,6 +63,7 @@ func main() {
 	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
 	profilePtr := flag.Bool("P", false, "Do CPU profiling")
 	iterationPtr := flag.Int("i", 500000, "Number of iterations for MCTS")
+	uctkPtr := flag.Float64("U", 1.0, "UCTK factor, MCTS only")
 	flag.Parse()
 
 	if *profilePtr {
@@ -96,8 +97,7 @@ func main() {
 	chooseMove = chooseAlphaBeta
 
 	if *monteCarloPtr {
-		mcts := &MCTS{}
-		mcts.iterations = *iterationPtr
+		mcts := &MCTS{iterations: *iterationPtr, uctk: *uctkPtr}
 		chooseMove = mcts.chooseMonteCarlo
 		rand.Seed(time.Now().UTC().UnixNano())
 	}
@@ -462,7 +462,7 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 			fmt.Printf("\nUntried moves: %v\n", startingNode.untriedMoves)
 		}
 	*/
-	bestmove, bestvalue := UCT(bd, startingNode, p.iterations, 1.00)
+	bestmove, bestvalue := UCT(bd, startingNode, p.iterations, p.uctk)
 	p.moveNode = bestmove
 	return bestmove.move, int(bestvalue)
 }
