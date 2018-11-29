@@ -12,14 +12,19 @@ import (
 	"time"
 )
 
+// MAXIMIZER, MINIMIZER, UNSET
+// are used to denote which player, and also
+// as indexes into arrays for too-clever output and
+// win/loss indicators.
 const (
-	MAXIMIZER = 1
-	MINIMIZER = -1
+	MAXIMIZER = 1  // Computer plays MAXIMIZER
+	MINIMIZER = -1 // Computer has human play MINIMIZER
 	UNSET     = 0
 	WIN       = 10000
 	LOSS      = -10000
 )
 
+// Board - internal representation of a traditional Kalah board
 type Board struct {
 	maxpits [7]int
 	minpits [7]int
@@ -28,6 +33,9 @@ type Board struct {
 
 type chooserFunction func(bd Board, moves []int, print bool) (bestpit int, bestvalue int)
 
+// GameState holds board when computer does MCTS next move decision,
+// and gets used to track the board during rollouts, adding child
+// moves and playing a random game to its end.
 type GameState struct {
 	player        int // player that made move resulting in board
 	nextPlayer    int // player that makes next move
@@ -35,6 +43,8 @@ type GameState struct {
 	cachedResults [3]float64
 }
 
+// Node - func UCT() builds up a tree of these to determine
+// which move to make.
 type Node struct {
 	move         int // Move that got to this condition
 	player       int // player that made the move
@@ -45,13 +55,16 @@ type Node struct {
 	untriedMoves []int
 }
 
+// MCTS holds values that func chooseMonteCarlo() needs, but
+// aren't passed in as arguments. Also keeps part of the *Node
+// tree from func UCT() until the computer's next move.
 type MCTS struct {
 	moveNode   *Node
 	iterations int
 	uctk       float64
 }
 
-var maxPly int = 16
+var maxPly = 16
 var winningStonesCount int
 
 func main() {
@@ -93,8 +106,7 @@ func main() {
 		player = MAXIMIZER
 	}
 
-	var chooseMove chooserFunction
-	chooseMove = chooseAlphaBeta
+	var chooseMove chooserFunction = chooseAlphaBeta
 
 	if *monteCarloPtr {
 		mcts := &MCTS{iterations: *iterationPtr, uctk: *uctkPtr}
@@ -368,43 +380,30 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 }
 
 func checkEnd(bd *Board) (end bool, winner int) {
-	winner = UNSET
 	if bd.maxpits[6] > winningStonesCount {
 		return true, MAXIMIZER
 	}
 	if bd.minpits[6] > winningStonesCount {
 		return true, MINIMIZER
 	}
-	sidesum := 0
+	winner = UNSET
+	maxsidesum := 0
+	minsidesum := 0
 	for i := 0; i < 6; i++ {
-		sidesum += bd.maxpits[i]
+		maxsidesum += bd.maxpits[i]
+		minsidesum += bd.minpits[i]
 	}
-	if sidesum == 0 {
+	if minsidesum == 0 || maxsidesum == 0 {
 		end = true
-		otherleft := 0
 		for i := 0; i < 6; i++ {
-			otherleft += bd.minpits[i]
+			bd.maxpits[i] = UNSET
 			bd.minpits[i] = UNSET
 		}
-		bd.minpits[6] += otherleft
-		winner = bd.maxpits[6] - bd.minpits[6]
-	} else {
-		sidesum = 0
-		for i := 0; i < 6; i++ {
-			sidesum += bd.minpits[i]
-		}
-		if sidesum == 0 {
-			end = true
-			otherleft := 0
-			for i := 0; i < 6; i++ {
-				otherleft += bd.maxpits[i]
-				bd.maxpits[i] = UNSET
-			}
-			bd.maxpits[6] += otherleft
-			winner = bd.maxpits[6] - bd.minpits[6]
-		}
+		bd.maxpits[6] += maxsidesum
+		bd.minpits[6] += minsidesum
 	}
 	if end {
+		winner = bd.maxpits[6] - bd.minpits[6]
 		// Ties can happen, winner == 0 in that case, which == UNSET
 		switch {
 		case winner > 0:
@@ -433,6 +432,12 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 				fmt.Printf("\n\tUntried moves: %v\n", startingNode.untriedMoves)
 				fmt.Printf("Looking for child node that does move %d\n", move)
 			*/
+			if len(startingNode.childNodes) == 0 {
+				// Can't possibly find move  in childNodes[],
+				// tree didn't get extended on this move.
+				startingNode = nil
+				break
+			}
 			if startingNode.childNodes != nil {
 				foundMove := false
 				for _, n := range startingNode.childNodes {
@@ -452,15 +457,23 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 			}
 		}
 	}
-	/*
-		if startingNode != nil {
+	if startingNode != nil {
+		/*
 			fmt.Printf("Tree root Node (%d/%d) has %d children: ",
 				startingNode.move, startingNode.player, len(startingNode.childNodes))
 			for _, cn := range startingNode.childNodes {
 				fmt.Printf("%d/%d ", cn.move, cn.player)
 			}
 			fmt.Printf("\nUntried moves: %v\n", startingNode.untriedMoves)
+			fmt.Printf("past moves: %v\n", pastMoves)
+			fmt.Printf("last move: %d\n", pastMoves[len(pastMoves)-1])
+		*/
+		if startingNode.move != pastMoves[len(pastMoves)-1] {
+			startingNode = nil
 		}
+	} /* else {
+		fmt.Printf("Nil tree root for move seq %v, board:\n%v\n", pastMoves, bd)
+	}
 	*/
 	bestmove, bestvalue := UCT(bd, startingNode, p.iterations, p.uctk)
 	p.moveNode = bestmove
@@ -584,10 +597,6 @@ func (p *Node) AddChild(move int, st *GameState) *Node {
 func (p *Node) Update(result float64) {
 	p.visits++
 	p.wins += result
-}
-
-func NewGameState() *GameState {
-	return &GameState{player: MINIMIZER}
 }
 
 func (p *GameState) Clone() *GameState {
