@@ -33,7 +33,7 @@ The usual 6 pits per play board is represented like this:
             human
 
 Computer's pot or store is X, human's is Y.
-Players move by sayin with of their pits (0 through 5)
+Players move by indicating which of their pits (0 through 5)
 they want to move.
 Players virtually empty the chosen pit,
 then distribute its contents (stones or seeds),
@@ -41,7 +41,7 @@ one per pit, traveling counterclockwise.
 Players drop a stone in their own pot,
 but not their opponents.
 Players get a bonus move if they drop the final stone
-in their hand into their own pot (X or Y, above).
+in their hand into their own pot (X for computer or Y for human, above).
 
 `kalah` the proram displays the current game board,
 then asks the human to input a move, which is a single-digit
@@ -53,6 +53,8 @@ Command line flags:
     -M    Use MCTS instead of alpha/beta minimax
     -P    Do CPU profiling
     -R    Reverse printed board, top-to-bottom
+    -U float
+          UCTK factor, MCTS only (default 1)
     -d int
           maximum lookahead depth, moves for each side (default 6)
     -i int
@@ -67,6 +69,16 @@ It defaults to deciding what move to make by using Alpha/Beta minimaxing.
 Reverse printed board makes it easier to open two terminals side-by-side
 and play instances of the game against each other. Use "-R" on one of the
 two instances so the programs print boards that look the same.
+
+There's nothing magic about minimax using 6 move lookahead,
+or Monte Carlo Tree Search using 500,000 iterations.
+I found them empirically.
+Both move choice algorithms can usually beat me if they move first,
+or if I make a mistake,
+and neither algorithm takes too long to decide with those values.
+
+I don't see that varying the UCTK parameter makes any difference.
+You can't use 0.0 as a value, however.
 
 ## Design
 
