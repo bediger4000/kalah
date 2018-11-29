@@ -105,6 +105,8 @@ func main() {
 
 	maxPly = 2 * *maxDepthPtr
 
+	var consecutiveMoves []int
+
 	for {
 		var pit, value int
 		fmt.Printf("%v\n", bd)
@@ -112,11 +114,14 @@ func main() {
 		case MINIMIZER:
 			pit = readMove(bd, true)
 		case MAXIMIZER:
+			fmt.Printf("Moves between last computer move and now: %v\n", consecutiveMoves)
 			before := time.Now()
 			pit, value = chooseMove(bd, true)
 			et := time.Since(before)
 			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
+			consecutiveMoves = make([]int, 0)
 		}
+		consecutiveMoves = append(consecutiveMoves, pit)
 		player, _ = makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
 		if gameEnd {
