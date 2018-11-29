@@ -27,7 +27,7 @@ type Board struct {
 	reverse bool
 }
 
-type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
+type chooserFunction func(bd Board, moves []int, print bool) (bestpit int, bestvalue int)
 
 type GameState struct {
 	player        int // player that made move resulting in board
@@ -93,14 +93,13 @@ func main() {
 	}
 
 	var chooseMove chooserFunction
+	chooseMove = chooseAlphaBeta
 
 	if *monteCarloPtr {
 		mcts := &MCTS{}
 		mcts.iterations = *iterationPtr
 		chooseMove = mcts.chooseMonteCarlo
 		rand.Seed(time.Now().UTC().UnixNano())
-	} else {
-		chooseMove = chooseAlphaBeta
 	}
 
 	maxPly = 2 * *maxDepthPtr
@@ -116,7 +115,7 @@ func main() {
 		case MAXIMIZER:
 			fmt.Printf("Moves between last computer move and now: %v\n", consecutiveMoves)
 			before := time.Now()
-			pit, value = chooseMove(bd, true)
+			pit, value = chooseMove(bd, consecutiveMoves, true)
 			et := time.Since(before)
 			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
 			consecutiveMoves = make([]int, 0)
@@ -177,7 +176,7 @@ func (p Board) String() string {
 	return top + mid + bot
 }
 
-func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
+func chooseAlphaBeta(bd Board, moves []int, print bool) (bestpit int, bestvalue int) {
 	bestvalue = 2 * LOSS
 	bestpit = 0
 	for pit, stones := range bd.maxpits[0:6] {
@@ -419,7 +418,7 @@ func checkEnd(bd *Board) (end bool, winner int) {
 
 // chooseMonteCarlo - based on current board, return the best pit
 // for MAXIMIZER to pick up and drop down the board.
-func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
+func (p *MCTS) chooseMonteCarlo(bd Board, consecutiveMoves []int, print bool) (bestpit int, value int) {
 	bestpit, bestvalue := UCT(bd, p.iterations, 1.00)
 	return bestpit, int(bestvalue)
 }
