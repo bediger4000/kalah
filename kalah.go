@@ -47,7 +47,7 @@ type Node struct {
 }
 
 type MCTS struct {
-	movesNode  *Node
+	moveNode   *Node
 	iterations int
 }
 
@@ -418,14 +418,56 @@ func checkEnd(bd *Board) (end bool, winner int) {
 
 // chooseMonteCarlo - based on current board, return the best pit
 // for MAXIMIZER to pick up and drop down the board.
-func (p *MCTS) chooseMonteCarlo(bd Board, consecutiveMoves []int, print bool) (bestpit int, value int) {
-	bestpit, bestvalue := UCT(bd, p.iterations, 1.00)
-	return bestpit, int(bestvalue)
+func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit int, value int) {
+	startingNode := p.moveNode
+	fmt.Printf("Trim off these moves: %v\n", pastMoves)
+	if startingNode != nil {
+		fmt.Printf("Root is move %d, first move %d\n", startingNode.move, pastMoves[0])
+		for _, move := range pastMoves[1:] {
+			fmt.Printf("Current tree root Node (%d/%d) has %d children: ",
+				startingNode.move, startingNode.player, len(startingNode.childNodes))
+			for _, cn := range startingNode.childNodes {
+				fmt.Printf("%d/%d ", cn.move, cn.player)
+			}
+			fmt.Printf("\n\tUntried moves: %v\n", startingNode.untriedMoves)
+			fmt.Printf("Looking for child node that does move %d\n", move)
+			if startingNode.childNodes != nil {
+				foundMove := false
+				for _, n := range startingNode.childNodes {
+					if n.move == move {
+						fmt.Printf("Found Node for %d: %v\n", move, n)
+						startingNode = n
+						startingNode.parentNode = nil
+						foundMove = true
+						break
+					}
+				}
+				if !foundMove {
+					fmt.Printf("Did not find move %d in child nodes of %v\n", move, startingNode)
+					startingNode = nil
+					break
+				}
+			}
+		}
+	}
+	if startingNode == nil {
+		fmt.Printf("Finding move without previous *Node tree\n")
+	} else {
+		fmt.Printf("Tree root Node (%d/%d) has %d children: ",
+			startingNode.move, startingNode.player, len(startingNode.childNodes))
+		for _, cn := range startingNode.childNodes {
+			fmt.Printf("%d/%d ", cn.move, cn.player)
+		}
+		fmt.Printf("\nUntried moves: %v\n", startingNode.untriedMoves)
+	}
+	bestmove, bestvalue := UCT(bd, p.iterations, 1.00)
+	p.moveNode = bestmove
+	return bestmove.move, int(bestvalue)
 }
 
 // UCT - based on board and player (who makes this move),
 // return the best move and its value
-func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
+func UCT(bd Board, itermax int, UCTK float64) (*Node, float64) {
 
 	rootState := GameState{player: MINIMIZER, nextPlayer: MAXIMIZER, board: bd}
 	rootNode := Node{player: MINIMIZER}
@@ -475,7 +517,7 @@ func UCT(bd Board, itermax int, UCTK float64) (int, float64) {
 	}
 
 	bs, bm := rootNode.bestMove(UCTK)
-	return bm.move, bs
+	return bm, bs
 }
 
 func (p *Node) bestMove(UCTK float64) (bestscore float64, bestmove *Node) {
