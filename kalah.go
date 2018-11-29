@@ -542,6 +542,7 @@ func (p *Node) UCTSelectChild(UCTK float64) *Node {
 	}
 	_, n := p.bestMove(UCTK)
 	if n == nil {
+		// yes, this should not happen. Leave the diagnostic output in.
 		fmt.Printf("UCTSelectChild returns nil\n")
 		fmt.Printf("Node: %v\n", p)
 		fmt.Printf("Move %d, Untried moves: %v\n", p.move, p.untriedMoves)
@@ -558,7 +559,7 @@ func (p *Node) UCTSelectChild(UCTK float64) *Node {
 }
 
 func (p *Node) UCB1(parentVisits float64, UCTK float64) float64 {
-	return p.wins/(p.visits+math.SmallestNonzeroFloat64) + UCTK*math.Sqrt(2.*math.Log(parentVisits)/(p.visits+math.SmallestNonzeroFloat64))
+	return p.wins/(p.visits+math.SmallestNonzeroFloat64) + UCTK*math.Sqrt(math.Log(parentVisits)/(p.visits+math.SmallestNonzeroFloat64))
 }
 
 // AddChild creates a new *Node with the state of st
