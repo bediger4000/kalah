@@ -460,22 +460,24 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 		}
 		fmt.Printf("\nUntried moves: %v\n", startingNode.untriedMoves)
 	}
-	bestmove, bestvalue := UCT(bd, p.iterations, 1.00)
+	bestmove, bestvalue := UCT(bd, startingNode, p.iterations, 1.00)
 	p.moveNode = bestmove
 	return bestmove.move, int(bestvalue)
 }
 
 // UCT - based on board and player (who makes this move),
 // return the best move and its value
-func UCT(bd Board, itermax int, UCTK float64) (*Node, float64) {
+func UCT(bd Board, rootNode *Node, itermax int, UCTK float64) (*Node, float64) {
 
 	rootState := GameState{player: MINIMIZER, nextPlayer: MAXIMIZER, board: bd}
-	rootNode := Node{player: MINIMIZER}
-	rootNode.untriedMoves, _ = rootState.GetMoves()
+	if rootNode == nil {
+		rootNode = &Node{player: MINIMIZER}
+		rootNode.untriedMoves, _ = rootState.GetMoves()
+	}
 
 	for i := 0; i < itermax; i++ {
 
-		node := &rootNode  // node moves up & down tree
+		node := rootNode   // node moves up & down tree
 		state := rootState // need to leave rootstate alone
 
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
