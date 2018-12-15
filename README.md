@@ -22,7 +22,7 @@ The Alpha/Beta version just seems cold-blooded and relentless.
 ## Use
 
 Players declare their moves with a number.
-The usual 6 pits per play board is represented like this:
+The usual 6 pits per player board is represented like this:
 
            computer
 
@@ -35,15 +35,22 @@ The usual 6 pits per play board is represented like this:
 Computer's pot or store is X, human's is Y.
 Players move by indicating which of their pits (0 through 5)
 they want to move.
-Players virtually empty the chosen pit,
+The program empties the chosen pit,
 then distribute its contents (stones or seeds),
 one per pit, traveling counterclockwise.
-Players drop a stone in their own pot,
+The program drops a stone in a player's own pot,
 but not their opponents.
 Players get a bonus move if they drop the final stone
 in their hand into their own pot (X for computer or Y for human, above).
+A bonus move can result in a bonus move.
 
-`kalah` the proram displays the current game board,
+This game does do captures.
+If a player drops their final stone in an empty pit (0 through 5)
+on their own side of the board,
+that last stone,
+and any stones in the pit opposite that empty pit get moved to the appropriate store.
+
+`kalah` the program displays the current game board,
 then asks the human to input a move, which is a single-digit
 number, 0 through 5.
 
@@ -56,7 +63,7 @@ Command line flags:
     -U float
           UCTK factor, MCTS only (default 1)
     -d int
-          maximum lookahead depth, moves for each side (default 6)
+          lookahead depth for Alpha/Beta, moves for each side (default 6)
     -i int
           Number of iterations for MCTS (default 500000)
     -n int
