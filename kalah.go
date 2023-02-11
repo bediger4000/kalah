@@ -33,28 +33,6 @@ type Board struct {
 
 type chooserFunction func(bd Board, moves []int, print bool) (bestpit int, bestvalue int)
 
-// GameState holds board when computer does MCTS next move decision,
-// and gets used to track the board during rollouts, adding child
-// moves and playing a random game to its end.
-type GameState struct {
-	player        int // player that made move resulting in board
-	nextPlayer    int // player that makes next move
-	board         Board
-	cachedResults [3]float64
-}
-
-// Node - func UCT() builds up a tree of these to determine
-// which move to make.
-type Node struct {
-	move         int // Move that got to this condition
-	player       int // player that made the move
-	parentNode   *Node
-	childNodes   []*Node
-	wins         float64
-	visits       float64
-	untriedMoves []int
-}
-
 // MCTS holds values that func chooseMonteCarlo() needs, but
 // aren't passed in as arguments. Also keeps part of the *Node
 // tree from func UCT() until the computer's next move.
@@ -106,12 +84,13 @@ func main() {
 		player = MAXIMIZER
 	}
 
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	var chooseMove chooserFunction = chooseAlphaBeta
 
 	if *monteCarloPtr {
 		mcts := &MCTS{iterations: *iterationPtr, uctk: *uctkPtr}
 		chooseMove = mcts.chooseMonteCarlo
-		rand.Seed(time.Now().UTC().UnixNano())
 	}
 
 	maxPly = 2 * *maxDepthPtr
@@ -415,278 +394,170 @@ func checkEnd(bd *Board) (end bool, winner int) {
 	return end, winner
 }
 
+type gameState struct {
+	board Board
+}
+
+type Node struct {
+	move         int
+	player       int
+	childNodes   []*Node
+	untriedMoves []int
+	parent       *Node
+	visits       int
+	wins         int
+}
+
 // chooseMonteCarlo - based on current board, return the best pit
 // for MAXIMIZER to pick up and drop down the board.
 func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit int, value int) {
-	startingNode := p.moveNode
-	// fmt.Printf("Trim off these moves: %v\n", pastMoves)
-	if startingNode != nil {
-		// fmt.Printf("Root is move %d, first move %d\n", startingNode.move, pastMoves[0])
-		for _, move := range pastMoves[1:] {
-			/*
-				fmt.Printf("Current tree root Node (%d/%d) has %d children: ",
-					startingNode.move, startingNode.player, len(startingNode.childNodes))
-				for _, cn := range startingNode.childNodes {
-					fmt.Printf("%d/%d ", cn.move, cn.player)
-				}
-				fmt.Printf("\n\tUntried moves: %v\n", startingNode.untriedMoves)
-				fmt.Printf("Looking for child node that does move %d\n", move)
-			*/
-			if len(startingNode.childNodes) == 0 {
-				// Can't possibly find move  in childNodes[],
-				// tree didn't get extended on this move.
-				startingNode = nil
-				break
-			}
-			if startingNode.childNodes != nil {
-				foundMove := false
-				for _, n := range startingNode.childNodes {
-					if n.move == move {
-						// fmt.Printf("Found Node for %d: %v\n", move, n)
-						startingNode = n
-						startingNode.parentNode = nil
-						foundMove = true
-						break
-					}
-				}
-				if !foundMove {
-					// fmt.Printf("Did not find move %d in child nodes of %v\n", move, startingNode)
-					startingNode = nil
-					break
-				}
-			}
+
+	root := &Node{
+		player:       MINIMIZER, // opponent made last move
+		untriedMoves: make([]int, 0, 7),
+	}
+	for i := 0; i < 7; i++ {
+		if bd.maxpits[i] != 0 {
+			root.untriedMoves = append(root.untriedMoves, i)
 		}
 	}
-	if startingNode != nil {
-		/*
-			fmt.Printf("Tree root Node (%d/%d) has %d children: ",
-				startingNode.move, startingNode.player, len(startingNode.childNodes))
-			for _, cn := range startingNode.childNodes {
-				fmt.Printf("%d/%d ", cn.move, cn.player)
-			}
-			fmt.Printf("\nUntried moves: %v\n", startingNode.untriedMoves)
-			fmt.Printf("past moves: %v\n", pastMoves)
-			fmt.Printf("last move: %d\n", pastMoves[len(pastMoves)-1])
-		*/
-		if startingNode.move != pastMoves[len(pastMoves)-1] {
-			startingNode = nil
+
+	state := &Board{}
+
+	for iter := 0; iter < p.iterations; iter++ {
+		// reset game state tracker
+		for i := 0; i < 7; i++ {
+			state.maxpits[i] = bd.maxpits[i]
+			state.minpits[i] = bd.minpits[i]
 		}
-	} /* else {
-		fmt.Printf("Nil tree root for move seq %v, board:\n%v\n", pastMoves, bd)
-	}
-	*/
-	bestmove, bestvalue := UCT(bd, startingNode, p.iterations, p.uctk)
-	p.moveNode = bestmove
-	return bestmove.move, int(bestvalue)
-}
+		node := root
 
-// UCT - based on board and player (who makes this move),
-// return the best move and its value
-func UCT(bd Board, rootNode *Node, itermax int, UCTK float64) (*Node, float64) {
+		var nextPlayer int
 
-	rootState := GameState{player: MINIMIZER, nextPlayer: MAXIMIZER, board: bd}
-	if rootNode == nil {
-		rootNode = &Node{player: MINIMIZER}
-		rootNode.untriedMoves, _ = rootState.GetMoves()
-	}
-
-	for i := 0; i < itermax; i++ {
-
-		node := rootNode   // node moves up & down tree
-		state := rootState // need to leave rootstate alone
-
+		// Selection
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
-			node = node.UCTSelectChild(UCTK) // updates node: now a child of rootNode
-			state.DoMove(node.move)          // updates state.player, state.nextPlayer and state.board
+			node = node.selectBestChild()
+			nextPlayer, _ = makeMove(state, node.move, node.player)
 		}
 
-		// This condition creates a child node from an untried move
-		// (if any exist), makes the move in state, and makes node
-		// the child node.
-		if len(node.untriedMoves) > 0 {
-			m := node.untriedMoves[rand.Intn(len(node.untriedMoves))]
-			state.DoMove(m) // update state.player, state.board
-			node = node.AddChild(m, &state)
-			// node now represents m, the previously-untried move.
+		gameEnd, winner := checkEnd(state)
+
+		// Expansion
+		if !gameEnd && len(node.untriedMoves) > 0 {
+			mv := node.randomUntried()
+
+			p := nextPlayer
+			nextPlayer, _ = makeMove(state, mv, nextPlayer)
+			node = node.addChild(mv, p, state)
+
+			gameEnd, winner = checkEnd(state)
 		}
 
-		moves, endOfGame := state.GetMoves()
-
-		// starting with current state, pick a random
-		// branch of the game tree, all the way to a win/loss.
-		for !endOfGame {
-			m := moves[rand.Intn(len(moves))]
-			state.DoMove(m)
-			moves, endOfGame = state.GetMoves()
+		// Simulation
+		if !gameEnd {
+			for gameEnd {
+				mv := state.randomMove(nextPlayer)
+				nextPlayer, _ = makeMove(state, mv, nextPlayer)
+				gameEnd, winner = checkEnd(state)
+			}
 		}
 
-		// state.board now points to a board where a player
-		// won and the other lost, and it's a "descendant"
-		// of the board in node. node isn't necessarily at
-		// the end of the game. Trace back up the tree,
-		// updating each node's wins and visit count.
-
-		state.resetCachedResults()
-		for ; node != nil; node = node.parentNode {
-			r := state.GetResult(node.player)
-			node.Update(r)
+		// Back propagation
+		for node != nil {
+			node.visits++
+			if winner == node.player {
+				node.wins++
+			}
+			node = node.parent
 		}
 	}
 
-	bs, bm := rootNode.bestMove(UCTK)
-	return bm, bs
+	// Select child move with the largest number of visits
+	bestChild := root.childNodes[0]
+	mostVisits := bestChild.visits
+
+	for _, c := range root.childNodes[1:] {
+		if c.visits > mostVisits {
+			bestChild = c
+			mostVisits = bestChild.visits
+		}
+	}
+
+	return bestChild.move, bestChild.visits
 }
 
-func (p *Node) bestMove(UCTK float64) (bestscore float64, bestmove *Node) {
-	bestscore = math.SmallestNonzeroFloat64
-	for _, c := range p.childNodes {
-		ucb1 := c.UCB1(p.visits, UCTK)
-		if ucb1 > bestscore {
-			bestscore = ucb1
-			bestmove = c
-		}
-	}
-	return bestscore, bestmove
-}
-
-func (p *Node) UCTSelectChild(UCTK float64) *Node {
-	if len(p.childNodes) == 1 {
-		return p.childNodes[0]
-	}
-	_, n := p.bestMove(UCTK)
-	if n == nil {
-		// yes, this should not happen. Leave the diagnostic output in.
-		fmt.Printf("UCTSelectChild returns nil\n")
-		fmt.Printf("Node: %v\n", p)
-		fmt.Printf("Move %d, Untried moves: %v\n", p.move, p.untriedMoves)
-		fmt.Printf("Child nodes (%d):\n", len(p.childNodes))
-		for _, child := range p.childNodes {
-			if child != nil {
-				fmt.Printf("\tplayer %d, move %d\n", child.player, child.move)
-			} else {
-				fmt.Printf("\tnil child node\n")
+func (bd *Board) randomMove(player int) int {
+	if player == MAXIMIZER {
+		for {
+			i := rand.Intn(6)
+			if bd.maxpits[i] != 0 {
+				return i
 			}
 		}
 	}
-	return n
-}
-
-func (p *Node) UCB1(parentVisits float64, UCTK float64) float64 {
-	return p.wins/(p.visits+math.SmallestNonzeroFloat64) + UCTK*math.Sqrt(math.Log(parentVisits)/(p.visits+math.SmallestNonzeroFloat64))
-}
-
-// AddChild creates a new *Node with the state of st
-// argument, takes move out of p.untriedMoves, adds
-// the new *Node to the array of child nodes, returns
-// the new *Node, which is then a child of p.
-func (p *Node) AddChild(move int, st *GameState) *Node {
-
-	n := &Node{move: move, parentNode: p, player: st.player}
-	n.untriedMoves, _ = st.GetMoves()
-
-	for i, m := range p.untriedMoves {
-		if m == move {
-			p.untriedMoves = append(p.untriedMoves[:i], p.untriedMoves[i+1:]...)
-			break
+	for {
+		i := rand.Intn(6)
+		if bd.minpits[i] != 0 {
+			return i
 		}
 	}
-	p.childNodes = append(p.childNodes, n)
-	return n
+	return 0
 }
 
-func (p *Node) Update(result float64) {
-	p.visits++
-	p.wins += result
+func (n *Node) randomUntried() int {
+	ln := len(n.untriedMoves)
+	randIdx := rand.Intn(ln)
+	ln--
+	mv := n.untriedMoves[randIdx]
+	n.untriedMoves[randIdx] = n.untriedMoves[ln]
+	n.untriedMoves = n.untriedMoves[:ln]
+	return mv
 }
 
-func (p *GameState) Clone() *GameState {
-	return &GameState{player: p.player, board: p.board}
-}
-
-func (p *GameState) resetCachedResults() {
-	p.cachedResults[0] = -1
-	p.cachedResults[1] = -1
-	p.cachedResults[2] = -1
-}
-
-func (p *GameState) DoMove(move int) {
-	nextPlayer, _ := makeMove(&(p.board), move, p.nextPlayer)
-	p.player = p.nextPlayer
-	p.nextPlayer = nextPlayer
-}
-
-func (p *GameState) GetMoves() (moves []int, endOfGame bool) {
-	var side, other [7]int
-	switch p.nextPlayer {
-	case MAXIMIZER:
-		side = p.board.maxpits
-		other = p.board.minpits
-	case MINIMIZER:
-		side = p.board.minpits
-		other = p.board.maxpits
+func (n *Node) addChild(mv int, player int, state *Board) *Node {
+	newChild := &Node{
+		move:         mv,
+		player:       player,
+		parent:       n,
+		untriedMoves: remainingMoves(state, player), // move mv already done in state
 	}
-	sidesum, othersum := 0, 0
-	for i := 0; i < 6; i++ {
-		sidesum += side[i]
-		othersum += other[i]
-		if side[i] != 0 {
-			moves = append(moves, i)
+	n.childNodes = append(n.childNodes, newChild)
+	return newChild
+}
+
+func (n *Node) selectBestChild() *Node {
+	bestScore := n.childNodes[0].ucb1()
+	bestChild := n.childNodes[0]
+	for _, c := range n.childNodes[1:] {
+		score := n.ucb1()
+		if score > bestScore {
+			bestScore = score
+			bestChild = c
 		}
 	}
+	return bestChild
+}
 
-	if sidesum == 0 || othersum == 0 {
-		endOfGame = true
-	} else {
-		if p.board.maxpits[6] > winningStonesCount ||
-			p.board.minpits[6] > winningStonesCount {
-			endOfGame = true
+func remainingMoves(bd *Board, player int) []int {
+	mvs := make([]int, 0, 7)
+	if player == MAXIMIZER {
+		for i, c := range bd.maxpits {
+			if c == 0 {
+				mvs = append(mvs, i)
+			}
+		}
+		return mvs
+	}
+	for i, c := range bd.minpits {
+		if c == 0 {
+			mvs = append(mvs, i)
 		}
 	}
-
-	return moves, endOfGame
+	return mvs
 }
 
-func (p *GameState) GetResult(playerJustMoved int) float64 {
-	cached := p.cachedResults[playerJustMoved+1]
-	if cached >= 0.0 {
-		return cached
-	}
-
-	maxStones := p.board.maxpits[6]
-	minStones := p.board.minpits[6]
-	for i := 0; i < 6; i++ {
-		maxStones += p.board.maxpits[i]
-		minStones += p.board.minpits[i]
-	}
-
-	if maxStones > minStones {
-		p.cachedResults[MAXIMIZER+1] = 1.0
-		p.cachedResults[MINIMIZER+1] = 0.0
-	} else if minStones > maxStones {
-		p.cachedResults[MAXIMIZER+1] = 0.0
-		p.cachedResults[MINIMIZER+1] = 1.0
-	} else {
-		p.cachedResults[MAXIMIZER+1] = 0.0
-		p.cachedResults[MINIMIZER+1] = 0.0
-	}
-
-	return p.cachedResults[playerJustMoved+1]
-}
-
-func (p *GameState) String() string {
-	rep := "MAX\n"
-	if p.player == MINIMIZER {
-		rep = "MIN\n"
-	}
-	rep += p.board.String()
-	return rep
-}
-
-func (p *Node) String() string {
-	x := fmt.Sprintf("%d/%d - %.0f:%.0f, %v; ",
-		p.move, p.player, p.wins, p.visits, p.untriedMoves)
-	for _, child := range p.childNodes {
-		x += fmt.Sprintf("%d/%d ", child.move, child.player)
-	}
-	return x
+func (n *Node) ucb1() float64 {
+	v := float64(n.visits)
+	return float64(n.visits)/v +
+		1.414*math.Sqrt(math.Log(float64(n.parent.visits+1))/v)
 }
