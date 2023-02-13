@@ -29,6 +29,7 @@ type Board struct {
 	maxpits [7]int
 	minpits [7]int
 	reverse bool
+	player  int // which player made the move resulting in this configuration
 }
 
 type chooserFunction func(bd Board, moves []int, print bool) (bestpit int, bestvalue int)
@@ -45,16 +46,19 @@ type MCTS struct {
 var maxPly = 16
 var winningStonesCount int
 
+var verbose bool
+
 func main() {
 
 	computerFirstPtr := flag.Bool("C", false, "Computer takes first move")
+	verbosePtr := flag.Bool("v", false, "verbose MCTS output")
 	maxDepthPtr := flag.Int("d", 6, "maximum lookahead depth, moves for each side")
 	stoneCountPtr := flag.Int("n", 4, "number of stones per pit")
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
 	profilePtr := flag.Bool("P", false, "Do CPU profiling")
 	iterationPtr := flag.Int("i", 500000, "Number of iterations for MCTS")
-	uctkPtr := flag.Float64("U", 1.0, "UCTK factor, MCTS only")
+	uctkPtr := flag.Float64("U", 1.414, "UCTK factor, MCTS only")
 	flag.Parse()
 
 	if *profilePtr {
@@ -66,6 +70,10 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 		defer f.Close()
+	}
+
+	if *verbosePtr {
+		verbose = true
 	}
 
 	var bd Board
@@ -311,6 +319,10 @@ READMOVE:
 func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	var sides [2]*[7]int
 
+	if pit > 6 {
+		fmt.Printf("problem player %d move %d, pit > 6: %s\n", player, pit, bd)
+	}
+
 	nextplayer = -player
 	plydelta = 1
 
@@ -326,6 +338,11 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	S := 0 // side of player is always 0
 	hand := sides[S][pit]
 	sides[S][pit] = UNSET
+
+	if hand == 0 {
+		fmt.Printf("problem player %d move %d, empty pit:\n%s\n", player, pit, bd)
+		panic("can't move empty pit")
+	}
 
 	bonusmove := false
 
@@ -351,6 +368,7 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 			i++
 		}
 	}
+	bd.player = player
 	if bonusmove {
 		nextplayer = player
 		plydelta = 0
@@ -405,7 +423,7 @@ type Node struct {
 	untriedMoves []int
 	parent       *Node
 	visits       int
-	wins         int
+	wins         float64
 }
 
 // chooseMonteCarlo - based on current board, return the best pit
@@ -414,9 +432,11 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 
 	root := &Node{
 		player:       MINIMIZER, // opponent made last move
-		untriedMoves: make([]int, 0, 7),
+		untriedMoves: make([]int, 0, 6),
 	}
-	for i := 0; i < 7; i++ {
+	// by definition the next player is MAXIMIZER.
+	// Fill in MAXIMIMIZER's untried moves
+	for i := 0; i < 6; i++ {
 		if bd.maxpits[i] != 0 {
 			root.untriedMoves = append(root.untriedMoves, i)
 		}
@@ -425,40 +445,76 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 	state := &Board{}
 
 	for iter := 0; iter < p.iterations; iter++ {
+		if verbose {
+			fmt.Printf("Iteration %d\n", iter)
+		}
 		// reset game state tracker
-		for i := 0; i < 7; i++ {
+		for i := 0; i < 6; i++ {
 			state.maxpits[i] = bd.maxpits[i]
 			state.minpits[i] = bd.minpits[i]
 		}
+		state.player = root.player
+		nextPlayer := -root.player
+
 		node := root
 
-		var nextPlayer int
+		if verbose {
+			fmt.Printf("0 game, %d, next %d:\n%v\n", state.player, nextPlayer, state)
+		}
 
 		// Selection
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
 			node = node.selectBestChild()
+			if verbose {
+				fmt.Printf("Best child %d by %d\n", node.move, node.player)
+			}
+			// Filling state from a game tree, so use node.move, node.player,
+			// ignoring nextPlayer for now.
 			nextPlayer, _ = makeMove(state, node.move, node.player)
+			if verbose {
+				fmt.Printf("after %d/%d, %d, next %d:\n%s\n", node.move, node.player, state.player, nextPlayer, state)
+			}
 		}
 
+		if verbose {
+			fmt.Printf("1 game, %d, next %d:\n%v\n", state.player, nextPlayer, state)
+		}
 		gameEnd, winner := checkEnd(state)
+		if verbose {
+			fmt.Printf("Game end %v, winner %d\n", gameEnd, winner)
+		}
 
 		// Expansion
 		if !gameEnd && len(node.untriedMoves) > 0 {
+			if verbose {
+				fmt.Printf("Expansion, player %d, next %d, untried moves %v\n", node.player, nextPlayer, node.untriedMoves)
+			}
 			mv := node.randomUntried()
+			if verbose {
+				fmt.Printf("Expansion, player %d, chose move %d, untried moves %v\n", node.player, mv, node.untriedMoves)
+			}
 
-			p := nextPlayer
+			node = node.addChild(mv, nextPlayer, state)
 			nextPlayer, _ = makeMove(state, mv, nextPlayer)
-			node = node.addChild(mv, p, state)
+			if verbose {
+				fmt.Printf("2 game, %d:\n%v\n", state.player, state)
+			}
 
 			gameEnd, winner = checkEnd(state)
 		}
 
 		// Simulation
 		if !gameEnd {
-			for gameEnd {
+			if verbose {
+				fmt.Printf("Simulation begins, %d:\n%v\n", nextPlayer, state)
+			}
+			for !gameEnd {
 				mv := state.randomMove(nextPlayer)
 				nextPlayer, _ = makeMove(state, mv, nextPlayer)
 				gameEnd, winner = checkEnd(state)
+			}
+			if verbose {
+				fmt.Printf("Simulation ends, %d, winner %d:\n%v\n", nextPlayer, winner, state)
 			}
 		}
 
@@ -467,6 +523,8 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 			node.visits++
 			if winner == node.player {
 				node.wins++
+			} else if winner == 0 {
+				node.wins += 0.5
 			}
 			node = node.parent
 		}
@@ -501,6 +559,7 @@ func (bd *Board) randomMove(player int) int {
 			return i
 		}
 	}
+	fmt.Printf("Board.randomMove(%d) shouldn't get here\n", player)
 	return 0
 }
 
@@ -514,12 +573,27 @@ func (n *Node) randomUntried() int {
 	return mv
 }
 
-func (n *Node) addChild(mv int, player int, state *Board) *Node {
+func (n *Node) addChild(mv int, nextPlayer int, state *Board) *Node {
+	if mv > 5 {
+		fmt.Printf("addChild, move %d illegal\n", mv)
+		fmt.Printf("parent node: %d/%d, untried moves %v\n",
+			n.move, n.player, n.untriedMoves)
+		fmt.Printf("next player %d, state.player %d\n%s\n",
+			nextPlayer, state.player, state)
+		panic("bad child move")
+	}
 	newChild := &Node{
 		move:         mv,
-		player:       player,
+		player:       state.player,
 		parent:       n,
-		untriedMoves: remainingMoves(state, player), // move mv already done in state
+		untriedMoves: remainingMoves(state, nextPlayer),
+	}
+	if verbose {
+		fmt.Printf("new child of %d/%d: %d/%d, untried %v\n",
+			n.move, n.player,
+			newChild.move, newChild.player,
+			newChild.untriedMoves,
+		)
 	}
 	n.childNodes = append(n.childNodes, newChild)
 	return newChild
@@ -529,7 +603,7 @@ func (n *Node) selectBestChild() *Node {
 	bestScore := n.childNodes[0].ucb1()
 	bestChild := n.childNodes[0]
 	for _, c := range n.childNodes[1:] {
-		score := n.ucb1()
+		score := c.ucb1()
 		if score > bestScore {
 			bestScore = score
 			bestChild = c
@@ -541,15 +615,15 @@ func (n *Node) selectBestChild() *Node {
 func remainingMoves(bd *Board, player int) []int {
 	mvs := make([]int, 0, 7)
 	if player == MAXIMIZER {
-		for i, c := range bd.maxpits {
-			if c == 0 {
+		for i := 0; i < 6; i++ {
+			if bd.maxpits[i] != 0 {
 				mvs = append(mvs, i)
 			}
 		}
 		return mvs
 	}
-	for i, c := range bd.minpits {
-		if c == 0 {
+	for i := 0; i < 6; i++ {
+		if bd.minpits[i] != 0 {
 			mvs = append(mvs, i)
 		}
 	}
@@ -558,6 +632,6 @@ func remainingMoves(bd *Board, player int) []int {
 
 func (n *Node) ucb1() float64 {
 	v := float64(n.visits)
-	return float64(n.visits)/v +
+	return n.wins/v +
 		1.414*math.Sqrt(math.Log(float64(n.parent.visits+1))/v)
 }
