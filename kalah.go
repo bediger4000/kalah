@@ -319,7 +319,7 @@ READMOVE:
 func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	var sides [2]*[7]int
 
-	if pit > 6 {
+	if pit > 5 {
 		fmt.Printf("problem player %d move %d, pit > 6: %s\n", player, pit, bd)
 	}
 
@@ -340,8 +340,7 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	sides[S][pit] = UNSET
 
 	if hand == 0 {
-		fmt.Printf("problem player %d move %d, empty pit:\n%s\n", player, pit, bd)
-		panic("can't move empty pit")
+		panic(fmt.Errorf("problem player %d move %d, empty pit:\n%s\n", player, pit, bd))
 	}
 
 	bonusmove := false
@@ -446,10 +445,10 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 
 	for iter := 0; iter < p.iterations; iter++ {
 		if verbose {
-			fmt.Printf("Iteration %d\n", iter)
+			fmt.Printf("\n\nIteration %d\n", iter)
 		}
 		// reset game state tracker
-		for i := 0; i < 6; i++ {
+		for i := 0; i < 7; i++ {
 			state.maxpits[i] = bd.maxpits[i]
 			state.minpits[i] = bd.minpits[i]
 		}
@@ -464,9 +463,10 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 
 		// Selection
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
+			oldmove, oldplayer := node.move, node.player
 			node = node.selectBestChild()
 			if verbose {
-				fmt.Printf("Best child %d by %d\n", node.move, node.player)
+				fmt.Printf("Best child of %d by %d:%d by %d\n", oldmove, oldplayer, node.move, node.player)
 			}
 			// Filling state from a game tree, so use node.move, node.player,
 			// ignoring nextPlayer for now.
@@ -494,8 +494,8 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 				fmt.Printf("Expansion, player %d, chose move %d, untried moves %v\n", node.player, mv, node.untriedMoves)
 			}
 
-			node = node.addChild(mv, nextPlayer, state)
 			nextPlayer, _ = makeMove(state, mv, nextPlayer)
+			node = node.addChild(mv, nextPlayer, state)
 			if verbose {
 				fmt.Printf("2 game, %d:\n%v\n", state.player, state)
 			}
@@ -613,7 +613,7 @@ func (n *Node) selectBestChild() *Node {
 }
 
 func remainingMoves(bd *Board, player int) []int {
-	mvs := make([]int, 0, 7)
+	mvs := make([]int, 0, 6)
 	if player == MAXIMIZER {
 		for i := 0; i < 6; i++ {
 			if bd.maxpits[i] != 0 {
