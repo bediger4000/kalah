@@ -541,7 +541,7 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 		}
 	}
 
-	return bestChild.move, bestChild.visits
+	return bestChild.move, int(bestChild.wins / float64(bestChild.visits) * 100.)
 }
 
 func (bd *Board) randomMove(player int) int {
