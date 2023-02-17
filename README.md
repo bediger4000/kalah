@@ -61,11 +61,11 @@ Command line flags:
     -P    Do CPU profiling
     -R    Reverse printed board, top-to-bottom
     -U float
-          UCTK factor, MCTS only (default 1)
+          UCTK factor, MCTS only (default 1.414)
     -d int
           lookahead depth for Alpha/Beta, moves for each side (default 6)
     -i int
-          Number of iterations for MCTS (default 500000)
+          Number of iterations for MCTS (default 200000)
     -n int
           number of stones per pit (default 4)
 
@@ -77,7 +77,7 @@ Reverse printed board makes it easier to open two terminals side-by-side
 and play instances of the game against each other. Use "-R" on one of the
 two instances so the programs print boards that look the same.
 
-There's nothing magic about minimax using 6 move lookahead,
+There's nothing magic about minimax using 6 move look ahead,
 or Monte Carlo Tree Search using 500,000 iterations.
 I found them empirically.
 Both move choice algorithms can usually beat me if they move first,
@@ -93,10 +93,12 @@ I used the Wikipedia article on [Alpha/Beta minimaxing](https://en.wikipedia.org
 I should have implemented one level of threading.
 Static value calculated as difference of player's pots or stores.
 
-The MCTS code follows the [MCTS example code](http://mcts.ai/code/python.html),
-transliterated into Go for [squava](https://github.com/bediger4000/squava),
-then mutated significantly to allow for Kalah's bonus moves.
-It was suprisingly difficult to get bonus moves correct for MCTS.
+I used the Wikipedia article on
+[Monte Carlo Tree Search](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Principle_of_operation)
+for the MCTS algorithm.
+The difficulty lies in the untried moves.
+Dropping a final stone in a player's store means that player makes the
+next move, so calculation of untried moves depends on the "next player".
 
 ### Bonus move
 
