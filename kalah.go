@@ -57,7 +57,7 @@ func main() {
 	reversePtr := flag.Bool("R", false, "Reverse printed board, top-to-bottom")
 	monteCarloPtr := flag.Bool("M", false, "MCTS instead of alpha/beta minimax")
 	profilePtr := flag.Bool("P", false, "Do CPU profiling")
-	iterationPtr := flag.Int("i", 500000, "Number of iterations for MCTS")
+	iterationPtr := flag.Int("i", 200000, "Number of iterations for MCTS")
 	uctkPtr := flag.Float64("U", 1.414, "UCTK factor, MCTS only")
 	flag.Parse()
 
@@ -464,7 +464,7 @@ func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit 
 		// Selection
 		for len(node.untriedMoves) == 0 && len(node.childNodes) > 0 {
 			oldmove, oldplayer := node.move, node.player
-			node = node.selectBestChild()
+			node = node.selectBestChild(p.uctk)
 			if verbose {
 				fmt.Printf("Best child of %d by %d:%d by %d\n", oldmove, oldplayer, node.move, node.player)
 			}
@@ -599,11 +599,11 @@ func (n *Node) addChild(mv int, nextPlayer int, state *Board) *Node {
 	return newChild
 }
 
-func (n *Node) selectBestChild() *Node {
-	bestScore := n.childNodes[0].ucb1()
+func (n *Node) selectBestChild(uctk float64) *Node {
+	bestScore := n.childNodes[0].ucb1(uctk)
 	bestChild := n.childNodes[0]
 	for _, c := range n.childNodes[1:] {
-		score := c.ucb1()
+		score := c.ucb1(uctk)
 		if score > bestScore {
 			bestScore = score
 			bestChild = c
@@ -630,8 +630,8 @@ func remainingMoves(bd *Board, player int) []int {
 	return mvs
 }
 
-func (n *Node) ucb1() float64 {
+func (n *Node) ucb1(uctk float64) float64 {
 	v := float64(n.visits)
 	return n.wins/v +
-		1.414*math.Sqrt(math.Log(float64(n.parent.visits+1))/v)
+		uctk*math.Sqrt(math.Log(float64(n.parent.visits+1))/v)
 }
