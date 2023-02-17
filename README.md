@@ -100,6 +100,10 @@ The difficulty lies in the untried moves.
 Dropping a final stone in a player's store means that player makes the
 next move, so calculation of untried moves depends on the "next player".
 
+This MCTS does a lightweight playout.
+Once the Expansion part of the algorithm is complete,
+the code just does random legal moves until someone wins.
+
 ### Bonus move
 
 This variant has a bonus move.
