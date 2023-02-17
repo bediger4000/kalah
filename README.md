@@ -78,7 +78,7 @@ and play instances of the game against each other. Use "-R" on one of the
 two instances so the programs print boards that look the same.
 
 There's nothing magic about minimax using 6 move look ahead,
-or Monte Carlo Tree Search using 500,000 iterations.
+or Monte Carlo Tree Search using 200,000 iterations.
 I found them empirically.
 Both move choice algorithms can usually beat me if they move first,
 or if I make a mistake,
