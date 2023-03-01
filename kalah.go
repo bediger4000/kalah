@@ -178,11 +178,12 @@ func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 			copy(bd2.maxpits[:], bd.maxpits[:])
 			copy(bd2.minpits[:], bd.minpits[:])
 			bd2.player = bd.player
+
 			makeMove(&bd2, pit, MAXIMIZER)
 			end, winner := checkEnd(&bd2)
 			var value int
 			if !end {
-				value = alphaBeta(bd2, 1, MINIMIZER, 2*LOSS, 2*WIN)
+				value = alphaBeta(&bd2, 1, MINIMIZER, 2*LOSS, 2*WIN)
 			} else {
 				switch winner {
 				case MAXIMIZER:
@@ -203,13 +204,11 @@ func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 	return bestpit, bestvalue
 }
 
-func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
+func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 	if bd.maxpits[6] > winningStonesCount {
-		fmt.Fprintf(os.Stderr, "x")
 		return WIN - ply
 	}
 	if bd.minpits[6] > winningStonesCount {
-		fmt.Fprintf(os.Stderr, "y")
 		return LOSS + ply
 	}
 	if ply > maxPly {
@@ -225,14 +224,17 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 	switch player {
 	case MAXIMIZER:
 		value = 2 * LOSS
+		var bd2 Board
 		for pit, stones := range bd.maxpits[0:6] {
 			if stones != UNSET {
-				bd2 := bd
+				copy(bd2.maxpits[:], bd.maxpits[:])
+				copy(bd2.minpits[:], bd.minpits[:])
+				bd2.player = bd.player
 				nextplayer, plydelta := makeMove(&bd2, pit, player)
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					n = alphaBeta(bd2, ply+plydelta, nextplayer, alpha, beta)
+					n = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
@@ -257,14 +259,17 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 		}
 	case MINIMIZER:
 		value = 2 * WIN // You can score greater than WIN
+		var bd2 Board
 		for pit, stones := range bd.minpits[0:6] {
 			if stones != 0 {
-				bd2 := bd
+				copy(bd2.maxpits[:], bd.maxpits[:])
+				copy(bd2.minpits[:], bd.minpits[:])
+				bd2.player = bd.player
 				nextplayer, plydelta := makeMove(&bd2, pit, player)
 				end, winner := checkEnd(&bd2)
 				var n int
 				if !end {
-					n = alphaBeta(bd2, ply+plydelta, nextplayer, alpha, beta)
+					n = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
 				} else {
 					switch winner {
 					case MAXIMIZER:
