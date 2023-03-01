@@ -180,11 +180,8 @@ func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 			bd2.player = bd.player
 
 			makeMove(&bd2, pit, MAXIMIZER)
-			end, winner := checkEnd(&bd2)
 			var value int
-			if !end {
-				value = alphaBeta(&bd2, 1, MINIMIZER, 2*LOSS, 2*WIN)
-			} else {
+			if end, winner := checkEnd(&bd2); end {
 				switch winner {
 				case MAXIMIZER:
 					value = WIN
@@ -193,6 +190,8 @@ func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 				default: // end of game, but no winner
 					value = 0
 				}
+			} else {
+				value = alphaBeta(&bd2, 1, MINIMIZER, 2*LOSS, 2*WIN)
 			}
 			if value > bestvalue {
 				bestvalue = value
@@ -204,13 +203,10 @@ func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
 	return bestpit, bestvalue
 }
 
+// alphaBeta does alpha-beta minimaxing. Computer is maximizer, human is minimizer.
+// Pass current game board (bd *Board) by reference to avoid having the compiler
+// create struct-copying code for each call to alphaBeta.
 func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
-	if bd.maxpits[6] > winningStonesCount {
-		return WIN - ply
-	}
-	if bd.minpits[6] > winningStonesCount {
-		return LOSS + ply
-	}
 	if ply > maxPly {
 		// static value function: difference between pots less ply depth,
 		// so that all things equal, choose the shortest path to a win,
@@ -221,9 +217,9 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 	// checkEnd() should get the case where someone already has
 	// more than half the stones in their pot, so alphaBeta()
 	// only has to do depth check
+
 	switch player {
 	case MAXIMIZER:
-		value = 2 * LOSS
 		var bd2 Board
 		for pit, stones := range bd.maxpits[0:6] {
 			if stones != UNSET {
@@ -231,11 +227,7 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 				copy(bd2.minpits[:], bd.minpits[:])
 				bd2.player = bd.player
 				nextplayer, plydelta := makeMove(&bd2, pit, player)
-				end, winner := checkEnd(&bd2)
-				var n int
-				if !end {
-					n = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
-				} else {
+				if end, winner := checkEnd(&bd2); end {
 					switch winner {
 					case MAXIMIZER:
 						value = WIN - ply
@@ -244,10 +236,8 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 					default:
 						value = 0
 					}
-				}
-
-				if n > value {
-					value = n
+				} else {
+					value = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
 				}
 				if value > alpha {
 					alpha = value
@@ -258,7 +248,6 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 			}
 		}
 	case MINIMIZER:
-		value = 2 * WIN // You can score greater than WIN
 		var bd2 Board
 		for pit, stones := range bd.minpits[0:6] {
 			if stones != 0 {
@@ -266,11 +255,7 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 				copy(bd2.minpits[:], bd.minpits[:])
 				bd2.player = bd.player
 				nextplayer, plydelta := makeMove(&bd2, pit, player)
-				end, winner := checkEnd(&bd2)
-				var n int
-				if !end {
-					n = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
-				} else {
+				if end, winner := checkEnd(&bd2); end {
 					switch winner {
 					case MAXIMIZER:
 						value = WIN - ply
@@ -279,9 +264,8 @@ func alphaBeta(bd *Board, ply, player, alpha, beta int) (value int) {
 					default:
 						value = 0
 					}
-				}
-				if n < value {
-					value = n
+				} else {
+					value = alphaBeta(&bd2, ply+plydelta, nextplayer, alpha, beta)
 				}
 				if value < beta {
 					beta = value
@@ -380,6 +364,9 @@ func makeMove(bd *Board, pit int, player int) (nextplayer int, plydelta int) {
 	return nextplayer, plydelta
 }
 
+// checkEnd figures out if the current game board, passed by reference
+// to avoid compiler-generated struct copying, represents a win/loss/tie
+// and for which player.
 func checkEnd(bd *Board) (end bool, winner int) {
 	if bd.maxpits[6] > winningStonesCount {
 		return true, MAXIMIZER
