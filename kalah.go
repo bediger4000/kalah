@@ -32,11 +32,10 @@ type Board struct {
 	player  int // which player made the move resulting in this configuration
 }
 
-type chooserFunction func(bd Board, moves []int, print bool) (bestpit int, bestvalue int)
+type chooserFunction func(bd Board, print bool) (bestpit int, bestvalue int)
 
 // MCTS holds values that func chooseMonteCarlo() needs, but
-// aren't passed in as arguments. Also keeps part of the *Node
-// tree from func UCT() until the computer's next move.
+// aren't passed in as arguments.
 type MCTS struct {
 	moveNode   *Node
 	iterations int
@@ -103,8 +102,6 @@ func main() {
 
 	maxPly = 2 * *maxDepthPtr
 
-	var consecutiveMoves []int
-
 	for {
 		var pit, value int
 		fmt.Printf("%v\n", bd)
@@ -112,14 +109,11 @@ func main() {
 		case MINIMIZER:
 			pit = readMove(bd, true)
 		case MAXIMIZER:
-			// fmt.Printf("Moves between last computer move and now: %v\n", consecutiveMoves)
 			before := time.Now()
-			pit, value = chooseMove(bd, consecutiveMoves, true)
+			pit, value = chooseMove(bd, true)
 			et := time.Since(before)
 			fmt.Printf("Computer chooses %d (%d) [%v]\n---\n", pit, value, et)
-			consecutiveMoves = make([]int, 0)
 		}
-		consecutiveMoves = append(consecutiveMoves, pit)
 		player, _ = makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
 		if gameEnd {
@@ -175,12 +169,15 @@ func (p Board) String() string {
 	return top + mid + bot
 }
 
-func chooseAlphaBeta(bd Board, moves []int, print bool) (bestpit int, bestvalue int) {
-	bestvalue = 2 * LOSS
+func chooseAlphaBeta(bd Board, print bool) (bestpit int, bestvalue int) {
+	bestvalue = 2 * LOSS // -infinity
 	bestpit = 0
+	var bd2 Board
 	for pit, stones := range bd.maxpits[0:6] {
 		if stones > 0 {
-			bd2 := bd
+			copy(bd2.maxpits[:], bd.maxpits[:])
+			copy(bd2.minpits[:], bd.minpits[:])
+			bd2.player = bd.player
 			makeMove(&bd2, pit, MAXIMIZER)
 			end, winner := checkEnd(&bd2)
 			var value int
@@ -192,11 +189,10 @@ func chooseAlphaBeta(bd Board, moves []int, print bool) (bestpit int, bestvalue 
 					value = WIN
 				case MINIMIZER:
 					value = LOSS
-				default: //
-					value = bd2.maxpits[6] - bd2.minpits[6]
+				default: // end of game, but no winner
+					value = 0
 				}
 			}
-			// fmt.Printf("pit %d/%d, value %d, best value %d for %d\n", pit, stones, value, bestpit, bestvalue)
 			if value > bestvalue {
 				bestvalue = value
 				bestpit = pit
@@ -214,10 +210,14 @@ func alphaBeta(bd Board, ply, player, alpha, beta int) (value int) {
 	}
 	if bd.minpits[6] > winningStonesCount {
 		fmt.Fprintf(os.Stderr, "y")
-		return LOSS - ply
+		return LOSS + ply
 	}
 	if ply > maxPly {
-		return bd.maxpits[6] - bd.minpits[6] // low cost static value
+		// static value function: difference between pots less ply depth,
+		// so that all things equal, choose the shortest path to a win,
+		// plus some empirical amount of the seeds in computer's pits.
+		return (bd.maxpits[6] - bd.minpits[6]) - ply +
+			(bd.maxpits[0]+bd.maxpits[1]+bd.maxpits[2]+bd.maxpits[3]+bd.maxpits[4]+2*bd.maxpits[5])/3
 	}
 	// checkEnd() should get the case where someone already has
 	// more than half the stones in their pot, so alphaBeta()
@@ -427,7 +427,7 @@ type Node struct {
 
 // chooseMonteCarlo - based on current board, return the best pit
 // for MAXIMIZER to pick up and drop down the board.
-func (p *MCTS) chooseMonteCarlo(bd Board, pastMoves []int, print bool) (bestpit int, value int) {
+func (p *MCTS) chooseMonteCarlo(bd Board, print bool) (bestpit int, value int) {
 
 	root := &Node{
 		player:       MINIMIZER, // opponent made last move
