@@ -7,7 +7,8 @@ accustomed to playing.
 ## Compiling
 
     $ git clone https://github.com/bediger4000/kalah.git $GOPATH/src/kalah
-    $ go build kalah
+    $ cd $GOPATH/src/kalah
+    $ go build kalah.go
     $ ./kalah
     OR
     $ ./kalah -M
@@ -116,3 +117,27 @@ It doesn't reach its move horizon while a player is in the middle
 of making a multi-move sweep.
 This does lead to unexpected increases in move calculation time
 during mid-game, when a lot of bonus moves occur.
+
+## Play one type of algorithm against another
+
+I wrote another program to try one algorithm against another.
+
+
+```bash
+$ git clone https://github.com/bediger4000/kalah.git $GOPATH/src/kalah
+$ cd $GOPATH/src/kalah
+$ go build playoff.go
+$ ./playoff
+    4  4  4  4  4  4
+ 0                    0
+    4  4  4  4  4  4
+> 
+```
+
+Hit return at ever `>` prompt to see the next move.
+Player 1 is at the top, player 2 has the bottom row of pits.
+
+Although Alpha-beta minimaxing can handily bet a human at a depth of 6 moves (14 plies),
+MCTS+UCB1 can beat A/B minimaxing at a depth of 7 moves, even if MCTS goes second.
+
+I must have something wrong with the static valuation function.
