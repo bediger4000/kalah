@@ -117,9 +117,12 @@ func main() {
 		player, _ = makeMove(&bd, pit, player)
 		gameEnd, winner := checkEnd(&bd)
 		if gameEnd {
-			w := "computer"
-			if winner == MINIMIZER {
+			w := "cat"
+			switch winner {
+			case MINIMIZER:
 				w = "human"
+			case MAXIMIZER:
+				w = "computer"
 			}
 			fmt.Printf("Game over, %s won\n", w)
 			break
