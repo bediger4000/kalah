@@ -137,7 +137,8 @@ $ ./playoff
 Hit return at ever `>` prompt to see the next move.
 Player 1 is at the top, player 2 has the bottom row of pits.
 
-Although Alpha-beta minimaxing can handily bet a human at a depth of 6 moves (14 plies),
-MCTS+UCB1 can beat A/B minimaxing at a depth of 7 moves, even if MCTS goes second.
+Although Alpha-beta minimaxing can handily beat a human at a depth of 6 moves (12 plies),
+MCTS+UCB1 can beat A/B minimaxing looking ahead to a depth of 7 moves,
+even if MCTS goes second.
 
 I must have something wrong with the static valuation function.
